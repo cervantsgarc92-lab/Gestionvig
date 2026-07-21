@@ -275,7 +275,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--t1);font-size:14px
 .mopt{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;border:1.5px solid transparent;background:var(--s2);transition:all .1s;}
 .mopt:hover{background:var(--s3);}
 .mopt.sel{background:var(--vc-bg);border-color:var(--vc-b);}
-.mopt.unavail{opacity:.35;cursor:not-allowed;pointer-events:none;}
+.mopt.unavail{opacity:.35;cursor:not-allowed;}
 .mo-name{font-size:12px;font-weight:600;flex:1;}
 .mo-meta{font-size:10px;color:var(--t3);}
 .mo-tag{font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;}
@@ -314,7 +314,8 @@ body{font-family:var(--body);background:var(--bg);color:var(--t1);font-size:14px
   <div class="hright">
     <div class="datenav">
       <button onclick="changeDay(-1)">‹</button>
-      <div class="datedisp" id="datedisp">—</div>
+      <div class="datedisp" id="datedisp" style="cursor:pointer;" onclick="openDatePicker()">—</div>
+      <input type="date" id="datepicker" style="opacity:0;width:0;height:0;position:absolute;padding:0;border:none;pointer-events:none;" onchange="selectDate(this.value)">
       <button onclick="changeDay(1)">›</button>
     </div>
     <button class="hbtn" onclick="goToday()">Hoy</button>
@@ -506,7 +507,7 @@ const EXCEL_EPOCH=new Date(1899,11,30);
 let vigs=[],vacaciones=[],novedades={},asignaciones={};
 let selDate=new Date();selDate.setHours(0,0,0,0);
 let filterAlb='todos',searchTxt='',currentView='dia',comWeekOffset=0;
-let modalVigId=null,modalSt='';
+let modalVigId=null,modalSt='',modalStatusDate=null;
 let maAlb=null,maTurno=null,maSel=null,maRolF='todos',maAlbF='todos';
 let mccVigId=null,mccDate=null,mccTurnoSel=null,mccAlbSel=null;
 let expV='dia',expA='todos';
@@ -514,6 +515,50 @@ let expV='dia',expA='todos';
 // ══════ UTILS ══════
 const dk=d=>d.toISOString().slice(0,10);
 function excelDate(n){if(!n||isNaN(n))return null;const d=new Date(EXCEL_EPOCH);d.setDate(d.getDate()+Math.round(n));d.setHours(0,0,0,0);return d;}
+
+function normId(id) {
+  if (id === null || id === undefined) return '';
+  let s = id.toString().trim();
+  if (s.endsWith('.0')) {
+    s = s.slice(0, -2);
+  }
+  return s;
+}
+
+function parseExcelDate(v) {
+  if (!v) return null;
+  if (v instanceof Date) {
+    return v;
+  }
+  if (typeof v === 'number') {
+    return excelDate(v);
+  }
+  if (typeof v === 'string') {
+    const s = v.trim();
+    if (!s) return null;
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      const d = new Date(s + 'T00:00:00');
+      if (!isNaN(d.getTime())) return d;
+    }
+    const parts = s.split(/[-/]/);
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        if (!isNaN(d.getTime())) return d;
+      } else {
+        let year = parseInt(parts[2]);
+        if (parts[2].length === 2) {
+          year += (year < 50 ? 2000 : 1900);
+        }
+        const d = new Date(year, parseInt(parts[1]) - 1, parseInt(parts[0]));
+        if (!isNaN(d.getTime())) return d;
+      }
+    }
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return d;
+  }
+  return null;
+}
 
 // Short name: first name + first surname
 function sn(nombre){
@@ -531,7 +576,7 @@ function isVC(v){return getRol(v)==='vc';}
 function getTK(v){const t=v.turno.toUpperCase(),a=ALBS.find(x=>x.id===v.albergue),tipo=a?a.tipo:'8h';return tipo==='12h'&&t==='TN'?'TN12':t;}
 function isDescanso(v,date){const dow=date.getDay(),d=(v.diaDescanso||'').toLowerCase().trim();return DIAS[dow]===d||DIAS[dow].startsWith(d.slice(0,3));}
 function isVac(v,date){
-  const r=vacaciones.find(x=>String(x.empId)===String(v.id));if(!r)return false;
+  const r=vacaciones.find(x=>normId(x.empId)===normId(v.id));if(!r)return false;
   const d=dk(date);
   // fecha fin = día de regreso → trabajaría ese día, so exclude only strictly before fin
   return(r.fi&&r.ff&&d>=r.fi&&d<r.ff)||(r.fi2&&r.ff2&&d>=r.fi2&&d<r.ff2);
@@ -606,10 +651,37 @@ function handleFile(input){
 function parseVigs(rows){
   if(!rows.length){showToast('Archivo vacío');return;}
   const keys=Object.keys(rows[0]);
-  function fk(cs){for(const c of cs){const f=keys.find(k=>k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').includes(c));if(f)return f;}return null;}
-  const kId=fk(['num','empleado','id','no','clave']),kN=fk(['nombre','name']),kP=fk(['puesto','cargo']),kA=fk(['albergue','alberg','lugar']),kT=fk(['turno']),kD=fk(['descanso','desc','dia libre','libre']);
-  if(!kN||!kA||!kT){showToast('Columnas no encontradas');return;}
-  vigs=rows.map((r,i)=>({id:r[kId]||(i+1),nombre:(r[kN]||'').toString().trim(),puesto:r[kP]?(r[kP]).toString().trim():'',albergue:normAlb(r[kA]),turno:(r[kT]||'').toString().trim().toUpperCase(),diaDescanso:normDay(r[kD]||'')})).filter(v=>v.nombre&&v.turno);
+  function fk(cs){
+    for(const c of cs){
+      const cleanC = c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
+      const f=keys.find(k=>{
+        const cleanK = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
+        return cleanK.includes(cleanC);
+      });
+      if(f)return f;
+    }
+    return null;
+  }
+  const kId=fk(['num','empleado','id','no','clave']);
+  const kN=fk(['nombre','name']);
+  const kP=fk(['puesto','cargo']);
+  const kA=fk(['albergue','alberg','lugar']);
+  const kT=fk(['turno']);
+  const kD=fk(['descanso','desc','dia libre','libre']);
+
+  const missing = [];
+  if(!kId) missing.push('N° empleado');
+  if(!kN) missing.push('Nombre');
+  if(!kA) missing.push('Albergue');
+  if(!kT) missing.push('Turno');
+  if(!kD) missing.push('Día descanso');
+
+  if(missing.length > 0){
+    showToast('Columnas faltantes: ' + missing.join(', '));
+    return;
+  }
+
+  vigs=rows.map((r,i)=>({id:normId(r[kId])||String(i+1),nombre:(r[kN]||'').toString().trim(),puesto:r[kP]?(r[kP]).toString().trim():'',albergue:normAlb(r[kA]),turno:(r[kT]||'').toString().trim().toUpperCase(),diaDescanso:normDay(r[kD]||'')})).filter(v=>v.nombre&&v.turno);
   saveVigs();
   showToast(`✓ ${vigs.length} vigilantes cargados`);showDash();
 }
@@ -620,20 +692,81 @@ function handleVacFile(input){
   reader.readAsBinaryString(file);
 }
 function parseVac(rows){
+  if(!rows.length){showToast('Archivo de vacaciones vacío');return;}
   const keys=Object.keys(rows[0]||{});
-  function fk(cs){for(const c of cs){const f=keys.find(k=>k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').includes(c));if(f)return f;}return null;}
+  function fk(cs){
+    for(const c of cs){
+      const cleanC = c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
+      const f=keys.find(k=>{
+        const cleanK = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
+        return cleanK.includes(cleanC);
+      });
+      if(f)return f;
+    }
+    return null;
+  }
   const kId=fk(['clave','num','empleado','id']);
+  const kFi=fk(['fecha inicial', 'inicial']);
+  const kFf=fk(['ingreso a laborar', 'regreso', 'final', 'fin']);
+  const kFi2=fk(['segundo periodo', 'inicial2']);
+  const kFf2=fk(['fin delsegundo', 'final2', 'regreso2']);
+
+  const missing = [];
+  if(!kId) missing.push('Clave de empleado');
+  if(!kFi) missing.push('Fecha inicial');
+  if(!kFf) missing.push('Fecha de regreso (Ingreso a laborar)');
+
+  if(missing.length > 0){
+    showToast('Columnas de vacaciones faltantes: ' + missing.join(', '));
+    return;
+  }
+
   vacaciones=rows.filter(r=>r[kId]).map(r=>{
-    const vals=Object.values(r).filter(v=>typeof v==='number'&&v>44000&&v<49000);
-    const d0=excelDate(vals[0]),d1=excelDate(vals[1]),d2=excelDate(vals[2]||null),d3=excelDate(vals[3]||null);
-    return{empId:r[kId],fi:d0?dk(d0):null,ff:d1?dk(d1):null,fi2:d2?dk(d2):null,ff2:d3?dk(d3):null};
+    const d0=parseExcelDate(r[kFi]);
+    const d1=parseExcelDate(r[kFf]);
+    const d2=kFi2?parseExcelDate(r[kFi2]):null;
+    const d3=kFf2?parseExcelDate(r[kFf2]):null;
+    return{
+      empId:normId(r[kId]),
+      fi:d0?dk(d0):null,
+      ff:d1?dk(d1):null,
+      fi2:d2?dk(d2):null,
+      ff2:d3?dk(d3):null
+    };
   }).filter(v=>v.fi&&v.ff);
+
   saveVacaciones();
-  showToast(`✓ ${vacaciones.length} registros de vacaciones`);render();
+  showToast(`✓ ${vacaciones.length} registros de vacaciones cargados`);render();
 }
 
 // ══════ DATE ══════
-function updDate(){document.getElementById('datedisp').textContent=selDate.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short',year:'numeric'});}
+function updDate(){
+  document.getElementById('datedisp').textContent=selDate.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+  const year = selDate.getFullYear();
+  const month = String(selDate.getMonth() + 1).padStart(2, '0');
+  const day = String(selDate.getDate()).padStart(2, '0');
+  const dp = document.getElementById('datepicker');
+  if (dp) {
+    dp.value = `${year}-${month}-${day}`;
+  }
+}
+function openDatePicker() {
+  const dp = document.getElementById('datepicker');
+  if (dp) {
+    if (typeof dp.showPicker === 'function') {
+      dp.showPicker();
+    } else {
+      dp.click();
+    }
+  }
+}
+function selectDate(val) {
+  if (!val) return;
+  const parts = val.split('-'); // YYYY-MM-DD
+  selDate = new Date(parts[0], parts[1] - 1, parts[2]);
+  selDate.setHours(0,0,0,0);
+  render();
+}
 function changeDay(n){selDate=new Date(selDate);selDate.setDate(selDate.getDate()+n);render();}
 function goToday(){selDate=new Date();selDate.setHours(0,0,0,0);render();}
 function changeComWeek(n){comWeekOffset+=n;renderComView();}
@@ -798,10 +931,10 @@ function renderComView(){
     const cells=days.map(d=>{
       const isToday=dk(d)===todayK;
       const st=getStatus(v,d);
-      if(st==='vac')return`<td class="${isToday?'com-today':''}"><div class="com-unavail">🏖 Vac.</div></td>`;
-      if(st==='inc')return`<td class="${isToday?'com-today':''}"><div class="com-unavail">🤒 Inc.</div></td>`;
-      if(st==='fal')return`<td class="${isToday?'com-today':''}"><div class="com-unavail">✗ Falta</div></td>`;
-      if(st==='per')return`<td class="${isToday?'com-today':''}"><div class="com-unavail">📋 Perm.</div></td>`;
+      if(st==='vac')return`<td class="${isToday?'com-today':''}"><div class="com-unavail" style="cursor:pointer;" onclick="openStatus(${v.id},'${dk(d)}')">🏖 Vac.</div></td>`;
+      if(st==='inc')return`<td class="${isToday?'com-today':''}"><div class="com-unavail" style="cursor:pointer;" onclick="openStatus(${v.id},'${dk(d)}')">🤒 Inc.</div></td>`;
+      if(st==='fal')return`<td class="${isToday?'com-today':''}"><div class="com-unavail" style="cursor:pointer;" onclick="openStatus(${v.id},'${dk(d)}')">✗ Falta</div></td>`;
+      if(st==='per')return`<td class="${isToday?'com-today':''}"><div class="com-unavail" style="cursor:pointer;" onclick="openStatus(${v.id},'${dk(d)}')">📋 Perm.</div></td>`;
       if(isDescanso(v,d))return`<td class="${isToday?'com-today':''}"><div class="com-unavail">😴 Desc.</div></td>`;
       const asign=getAsignForVig(v.id,d);
       if(asign){
@@ -810,23 +943,29 @@ function renderComView(){
       }
       return`<td class="${isToday?'com-today':''}"><div class="com-empty" onclick="openComCell(${v.id},'${dk(d)}')">⚠ Sin asignar</div></td>`;
     }).join('');
-    return`<tr><td class="com-name-cell">${sn(v.nombre)}<br><span style="font-size:9px;color:var(--vc);font-family:var(--mono)">${v.albergue}</span></td>${cells}</tr>`;
+    return`<tr><td class="com-name-cell" style="cursor:pointer;" onclick="openStatus(${v.id})">${sn(v.nombre)}<br><span style="font-size:9px;color:var(--vc);font-family:var(--mono)">${v.albergue}</span></td>${cells}</tr>`;
   }).join('');
   document.getElementById('com-table').innerHTML=`<thead><tr><th class="name-h">Comodín</th>${hdrs}</tr></thead><tbody>${rows||'<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--t3)">Sin comodines en el Excel</td></tr>'}</tbody>`;
 }
 
 // ══════ STATUS MODAL ══════
-function openStatus(vigId){
+function openStatus(vigId, dateObj){
   const v=vigs.find(x=>String(x.id)===String(vigId));if(!v)return;
-  modalVigId=vigId;const cur=getNov(vigId,selDate);modalSt=cur;
+  modalVigId=vigId;
+  modalStatusDate = dateObj ? new Date(dateObj + 'T12:00:00') : new Date(selDate);
+  modalStatusDate.setHours(0,0,0,0);
+
+  const cur=getNov(vigId, modalStatusDate);
+  modalSt=cur;
   document.getElementById('ms-name').textContent=v.nombre;
-  document.getElementById('ms-meta').textContent=`${getRol(v).toUpperCase()} · ${ALBS.find(a=>a.id===v.albergue)?.name||v.albergue} · ${dk(selDate)}`;
+  document.getElementById('ms-meta').textContent=`${getRol(v).toUpperCase()} · ${ALBS.find(a=>a.id===v.albergue)?.name||v.albergue} · ${dk(modalStatusDate)}`;
   document.querySelectorAll('.sopt').forEach(el=>el.classList.toggle('on',el.dataset.s===cur));
   openMod('m-status');
 }
 function selSt(s){modalSt=s;document.querySelectorAll('.sopt').forEach(el=>el.classList.toggle('on',el.dataset.s===s));}
 function saveStatus(){
-  const k=`${modalVigId}_${dk(selDate)}`;
+  const dateToUse = modalStatusDate || selDate;
+  const k=`${modalVigId}_${dk(dateToUse)}`;
   if(modalSt)novedades[k]=modalSt;else delete novedades[k];
   saveNovedad(k, modalSt||null);
   closeMod('m-status');render();showToast('✓ Estado actualizado');
@@ -870,7 +1009,15 @@ function renderAsignList(){
     </div>`;
   }).join(''):'<div style="font-size:11px;color:var(--t3);padding:12px;text-align:center">Sin vigilantes</div>';
 }
-function selAsign(id,el){maSel=id;document.querySelectorAll('#ma-list .mopt').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');}
+function selAsign(id,el){
+  const v=vigs.find(x=>String(x.id)===String(id));
+  if(v && getStatus(v,selDate)){
+    closeMod('m-asign');
+    openStatus(id);
+    return;
+  }
+  maSel=id;document.querySelectorAll('#ma-list .mopt').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');
+}
 function saveAsign(){
   if(!maSel){closeMod('m-asign');return;}
   // Save asignacion for this vig on selDate
@@ -923,13 +1070,27 @@ function removeComCell(){
 
 // ══════ DELETE ALL ══════
 function deleteAll(){
-  vigs=[];vacaciones=[];novedades={};asignaciones={};
-  // Delete all Firebase docs across all four collections
-  Promise.all([
+  const novKeys = Object.keys(novedades);
+  const asigKeys = Object.keys(asignaciones);
+
+  const promises = [
     window._fbSet('config','vigs',{list:[]}),
-    window._fbSet('config','vacaciones',{list:[]}),
-    // novedades & asignaciones cleared by the onSnapshot listeners on next render
-  ]);
+    window._fbSet('config','vacaciones',{list:[]})
+  ];
+
+  novKeys.forEach(k => {
+    promises.push(window._fbDel('novedades', k));
+  });
+  asigKeys.forEach(k => {
+    promises.push(window._fbDel('asignaciones', k));
+  });
+
+  vigs=[];vacaciones=[];novedades={};asignaciones={};
+
+  Promise.all(promises).then(() => {
+    render();
+  }).catch(e => console.error(e));
+
   closeMod('m-del');
   document.getElementById('scr-dash').style.display='none';
   document.getElementById('scr-upload').style.display='';
@@ -1018,7 +1179,7 @@ async function doExport(){
 function exportNovExcel(){
   const rows=[];
   Object.entries(novedades).forEach(([key,st])=>{
-    if(st!=='inc'&&st!=='per')return;
+    if(st!=='inc'&&st!=='per'&&st!=='fal')return;
     const[vigId,dateStr]=key.split('_');
     const v=vigs.find(x=>String(x.id)===String(vigId));
     if(!v)return;
@@ -1028,17 +1189,17 @@ function exportNovExcel(){
       'Puesto/Rol':getRol(v).toUpperCase(),
       'Turno':v.turno,
       'Fecha':dateStr,
-      'Estado':st==='inc'?'Incapacidad':'Permiso',
+      'Estado':st==='inc'?'Incapacidad':st==='per'?'Permiso':'Falta',
     });
   });
-  if(!rows.length){showToast('Sin registros de incapacidades o permisos');return;}
+  if(!rows.length){showToast('Sin registros de incapacidades, permisos o faltas');return;}
   rows.sort((a,b)=>a.Fecha.localeCompare(b.Fecha));
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.json_to_sheet(rows);
   ws['!cols']=[{wch:24},{wch:14},{wch:12},{wch:8},{wch:12},{wch:14}];
-  XLSX.utils.book_append_sheet(wb,ws,'Incapacidades y Permisos');
-  XLSX.writeFile(wb,`incapacidades_permisos_${dk(new Date())}.xlsx`);
-  showToast('✓ Excel descargado');closeMod('m-export');
+  XLSX.utils.book_append_sheet(wb,ws,'Incapacidades, Permisos, Faltas');
+  XLSX.writeFile(wb,`novedades_${dk(new Date())}.xlsx`);
+  showToast('✓ Excel de novedades descargado');closeMod('m-export');
 }
 
 // ══════ STORAGE → FIREBASE ══════
