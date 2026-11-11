@@ -1,6 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
+<html lang="es" data-theme="light"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gestión de Vigilantes · PYSCPR</title>
@@ -8,7 +7,7 @@
 <script type="module">
 // ══════ FIREBASE INIT ══════
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, doc, getDoc, getDocs, setDoc, deleteDoc, onSnapshot, collection, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBIKM2O0ztI97FeECfqXw4pZxUAJpSnpKQ",
@@ -39,6 +38,18 @@ window._fbDoc = doc;
 window._fbGet = getDoc;
 window._fbSnap = onSnapshot;
 
+// Wipe every document in a collection, batched 400 at a time (Firestore caps at 500)
+window._fbWipe = async function(colName) {
+  const snap = await getDocs(collection(db, colName));
+  const docs = snap.docs;
+  for (let i = 0; i < docs.length; i += 400) {
+    const batch = writeBatch(db);
+    docs.slice(i, i + 400).forEach(x => batch.delete(x.ref));
+    await batch.commit();
+  }
+  return docs.length;
+};
+
 // ── Real-time listeners (novedades + asignaciones) ──
 // These fire on every remote change and keep local state in sync
 window._setupListeners = function() {
@@ -61,7 +72,12 @@ window.addEventListener('load', async () => {
   try {
     // vigs
     const vd = await window._fbGet(window._fbDoc(window._db, 'config', 'vigs'));
-    if (vd.exists()) { vigs = vd.data().list || []; }
+    if (vd.exists()) {
+      const cfg = vd.data();
+      vigs = cfg.list || [];
+      rotAnchor = cfg.rotAnchor || null;
+      if (typeof cfg.rotOn === 'boolean') rotOn = cfg.rotOn;
+    }
     // vacaciones
     const vc = await window._fbGet(window._fbDoc(window._db, 'config', 'vacaciones'));
     if (vc.exists()) { vacaciones = vc.data().list || []; }
@@ -70,134 +86,393 @@ window.addEventListener('load', async () => {
   window._setupListeners();
 });
 </script>
+<style>/* latin-ext */
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("3e8e03bd-e770-4885-8d84-7cbd0c5f1c21") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("654a1fb5-5c5e-4cc9-96cd-f3ed80c6c8c4") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("43e19dbc-bc73-499a-b799-58f8d1476229") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("f751fb7a-c3a6-411f-a06d-2e5478d5ef2a") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* greek */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("b1bc8c99-ce47-492e-9fdb-dc323490f264") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fbee2365-7f3c-46a1-b293-b3ef1c38a4f8") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("ae5bd9e8-0fa2-4e90-b331-7cb84eec79a4") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* greek */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("b1bc8c99-ce47-492e-9fdb-dc323490f264") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fbee2365-7f3c-46a1-b293-b3ef1c38a4f8") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("ae5bd9e8-0fa2-4e90-b331-7cb84eec79a4") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* greek */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("b1bc8c99-ce47-492e-9fdb-dc323490f264") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fbee2365-7f3c-46a1-b293-b3ef1c38a4f8") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("ae5bd9e8-0fa2-4e90-b331-7cb84eec79a4") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* greek */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("b1bc8c99-ce47-492e-9fdb-dc323490f264") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fbee2365-7f3c-46a1-b293-b3ef1c38a4f8") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("ae5bd9e8-0fa2-4e90-b331-7cb84eec79a4") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* greek */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("b1bc8c99-ce47-492e-9fdb-dc323490f264") format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("fbee2365-7f3c-46a1-b293-b3ef1c38a4f8") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("ae5bd9e8-0fa2-4e90-b331-7cb84eec79a4") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 :root{
-  --bg:#EDECEA;--s1:#fff;--s2:#F0EDEA;--s3:#E5E1DC;
-  --b1:rgba(0,0,0,.08);--b2:rgba(0,0,0,.15);
-  --t1:#17150F;--t2:#6B6760;--t3:#A09C96;--t4:#C8C4BE;
-  --tm-bg:#1E3A8A;--tm-l:#DBEAFE;--tm-t:#1E3A8A;--tm-b:#BFDBFE;
-  --tt-bg:#78350F;--tt-l:#FEF3C7;--tt-t:#78350F;--tt-b:#FDE68A;
-  --tn-bg:#2D1B69;--tn-l:#EDE9FE;--tn-t:#2D1B69;--tn-b:#DDD6FE;
-  --td-bg:#064E3B;--td-l:#D1FAE5;--td-t:#064E3B;--td-b:#A7F3D0;
-  --tdn-bg:#1F2937;--tdn-l:#F3F4F6;--tdn-t:#1F2937;--tdn-b:#E5E7EB;
-  --jt:#92400E;--jt-bg:#FEF3C7;--jt-b:#FCD34D;
-  --vc:#4C1D95;--vc-bg:#EDE9FE;--vc-b:#A78BFA;
-  --vac:#0C4A6E;--vac-bg:#E0F2FE;--vac-b:#7DD3FC;
-  --inc:#991B1B;--inc-bg:#FEE2E2;--inc-b:#FCA5A5;
-  --fal:#7C2D12;--fal-bg:#FFF7ED;--fal-b:#FDBA74;
-  --per:#065F46;--per-bg:#D1FAE5;--per-b:#6EE7B7;
-  --al:#B91C1C;--al-bg:#FEF2F2;--al-b:#FCA5A5;
-  --ok:#065F46;--ok-bg:#D1FAE5;
+  color-scheme:light;
+  --bg:#F2F3F5;--s1:#FFFFFF;--s2:#F7F8FA;--s3:#EBEDF1;
+  --b1:rgba(16,24,40,.09);--b2:rgba(16,24,40,.18);
+  --t1:#12161D;--t2:#59616F;--t3:#8A93A2;--t4:#B4BCC8;
+  --ink:#12161D;--onink:#FFFFFF;
+  --today-bg:#EEF3FF;
+  --tv-bg:#4A34A0;--tv-l:#F1EEFD;--tv-t:#4A34A0;--tv-b:#CFC4F2;
+  --te-bg:#0F766E;--te-l:#E6F5F3;--te-t:#0B5A54;--te-b:#9DD5CE;
+  --tm-bg:#3B60D8;--tm-l:#EDF1FE;--tm-t:#2B47A8;--tm-b:#CFDAF9;
+  --tt-bg:#B4791C;--tt-l:#FDF4E6;--tt-t:#8A5A11;--tt-b:#F2DEB8;
+  --tn-bg:#6146C6;--tn-l:#F1EEFD;--tn-t:#4A34A0;--tn-b:#DCD4F7;
+  --td-bg:#1E8168;--td-l:#E9F7F2;--td-t:#14624E;--td-b:#C4E9DC;
+  --tdn-bg:#3F4A5C;--tdn-l:#F0F2F6;--tdn-t:#333C4B;--tdn-b:#D8DDE5;
+  --jt:#8A5A11;--jt-bg:#FDF4E6;--jt-b:#EBD6AC;
+  --vc:#4A34A0;--vc-bg:#F1EEFD;--vc-b:#CFC4F2;
+  --vac:#0E6C90;--vac-bg:#E7F5FB;--vac-b:#BCE0EF;
+  --inc:#B02B2B;--inc-bg:#FDECEC;--inc-b:#F3C6C6;
+  --fal:#A0501C;--fal-bg:#FDF1E8;--fal-b:#F0D2B8;
+  --per:#14624E;--per-bg:#E9F7F2;--per-b:#BCE3D6;
+  --al:#B02B2B;--al-bg:#FDECEC;--al-b:#F3C6C6;
+  --ok:#14624E;--ok-bg:#E9F7F2;
   --mono:'DM Mono',monospace;--body:'Syne',sans-serif;
-  --r:10px;--rl:18px;
+  --r:8px;--rl:14px;
+  --sh1:0 1px 2px rgba(16,24,40,.05);
+  --sh2:0 1px 3px rgba(16,24,40,.06),0 8px 24px -12px rgba(16,24,40,.14);
+}
+[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0D1014;--s1:#15191F;--s2:#1A1F27;--s3:#232A34;
+  --b1:rgba(255,255,255,.08);--b2:rgba(255,255,255,.18);
+  --t1:#E7EBF1;--t2:#98A2B1;--t3:#6C7686;--t4:#49515F;
+  --ink:#E7EBF1;--onink:#0D1014;
+  --today-bg:#17203A;
+  --tm-bg:#7396F5;--tm-l:#182135;--tm-t:#A8C0FB;--tm-b:#2C3A5C;
+  --tt-bg:#DDA53C;--tt-l:#2A2214;--tt-t:#EFC98A;--tt-b:#43351B;
+  --tn-bg:#9A82F0;--tn-l:#1E1A32;--tn-t:#C0AEFB;--tn-b:#332B57;
+  --td-bg:#3DB394;--td-l:#122822;--td-t:#7FD9BF;--td-b:#1D4438;
+  --tdn-bg:#8B96A8;--tdn-l:#1B2029;--tdn-t:#B8C1CF;--tdn-b:#2C3441;
+  --tv-bg:#9A82F0;--tv-l:#1E1A32;--tv-t:#C0AEFB;--tv-b:#332B57;
+  --te-bg:#4FD6C4;--te-l:#12292A;--te-t:#7FE3D5;--te-b:#1E4844;
+  --jt:#E0B978;--jt-bg:#2A2214;--jt-b:#4A3A1C;
+  --vc:#C0AEFB;--vc-bg:#1E1A32;--vc-b:#3B3168;
+  --vac:#7CCBE8;--vac-bg:#0F2733;--vac-b:#1C4358;
+  --inc:#F09B9B;--inc-bg:#2C1717;--inc-b:#5A2A2A;
+  --fal:#E8A97A;--fal-bg:#2A1B12;--fal-b:#4E3220;
+  --per:#7FD9BF;--per-bg:#122822;--per-b:#1D4438;
+  --al:#F09B9B;--al-bg:#2C1717;--al-b:#5A2A2A;
+  --ok:#7FD9BF;--ok-bg:#122822;
+  --sh1:0 1px 2px rgba(0,0,0,.4);
+  --sh2:0 1px 3px rgba(0,0,0,.5),0 10px 28px -14px rgba(0,0,0,.7);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:var(--body);background:var(--bg);color:var(--t1);font-size:14px;min-height:100vh;}
+body{font-family:var(--body);background:var(--bg);color:var(--t1);font-size:14px;min-height:100vh;-webkit-font-smoothing:antialiased;text-wrap:pretty;}
+a{color:var(--tm-bg);text-decoration:none;}
+a:hover{color:var(--tm-t);text-decoration:underline;}
+::selection{background:var(--tm-b);}
 
 /* HEADER */
-.hdr{background:var(--t1);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
-.hbrand{display:flex;align-items:center;gap:10px;}
-.hlogo{width:34px;height:34px;background:rgba(255,255,255,.1);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;}
-.htitle{font-size:14px;font-weight:700;color:#fff;}
-.hsub{font-size:10px;color:rgba(255,255,255,.4);font-family:var(--mono);margin-top:1px;}
+.hdr{position:sticky;top:0;z-index:60;background:var(--s1);border-bottom:1px solid var(--b1);padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+.hbrand{display:flex;align-items:center;gap:11px;}
+.hlogo{width:32px;height:32px;background:var(--ink);color:var(--onink);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;}
+.htitle{font-size:14px;font-weight:700;color:var(--t1);letter-spacing:-.01em;}
+.hsub{font-size:10px;color:var(--t3);font-family:var(--mono);margin-top:2px;}
 .hright{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-.datenav{display:flex;align-items:center;gap:3px;background:rgba(255,255,255,.1);border-radius:7px;padding:4px 7px;}
-.datenav button{background:none;border:none;color:rgba(255,255,255,.65);cursor:pointer;font-size:15px;padding:0 3px;line-height:1;}
-.datenav button:hover{color:#fff;}
-.datedisp{font-family:var(--mono);font-size:10px;color:#fff;white-space:nowrap;min-width:110px;text-align:center;}
-.hbtn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;border-radius:6px;padding:5px 11px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--body);white-space:nowrap;transition:all .15s;}
-.hbtn:hover{background:rgba(255,255,255,.2);}
-.reup{position:relative;overflow:hidden;}
+.datenav{display:flex;align-items:center;gap:2px;background:var(--s2);border:1px solid var(--b1);border-radius:9px;padding:3px 4px;}
+.datenav button{background:none;border:none;color:var(--t2);cursor:pointer;font-size:16px;padding:0 6px;line-height:1.2;border-radius:6px;}
+.datenav button:hover{color:var(--t1);background:var(--s3);}
+.datedisp{font-family:var(--mono);font-size:10.5px;color:var(--t1);white-space:nowrap;min-width:120px;text-align:center;}
+.hbtn{background:var(--s2);border:1px solid var(--b1);color:var(--t1);border-radius:8px;padding:6px 12px;font-size:10.5px;font-weight:600;cursor:pointer;font-family:var(--body);white-space:nowrap;transition:background .15s,border-color .15s;}
+.hbtn:hover{background:var(--s3);border-color:var(--b2);}
+.reup{position:relative;overflow:hidden;display:inline-flex;align-items:center;}
 .reup input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
-.hbtn-exp{background:rgba(0,180,130,.15);border-color:rgba(0,180,130,.3);color:#4ADE80;}
-.hbtn-del{background:rgba(185,28,28,.15);border-color:rgba(185,28,28,.3);color:#FCA5A5;}
+.hbtn-exp{background:var(--ink);border-color:var(--ink);color:var(--onink);}
+.hbtn-exp:hover{background:var(--ink);opacity:.86;border-color:var(--ink);}
+.hbtn-del{color:var(--al);border-color:var(--al-b);background:var(--al-bg);}
+.hbtn-del:hover{background:var(--al-bg);border-color:var(--al);}
+.themebtn{width:32px;height:29px;display:inline-flex;align-items:center;justify-content:center;padding:0;font-size:13px;}
 
 /* UPLOAD */
-.up-wrap{max-width:500px;margin:52px auto;padding:0 20px;}
-.upzone{border:2px dashed var(--b2);border-radius:var(--rl);padding:44px 24px;text-align:center;cursor:pointer;position:relative;background:var(--s1);transition:all .15s;}
+.up-wrap{max-width:520px;margin:64px auto;padding:0 20px;}
+.upzone{border:1.5px dashed var(--b2);border-radius:var(--rl);padding:48px 26px;text-align:center;cursor:pointer;position:relative;background:var(--s1);transition:all .15s;box-shadow:var(--sh1);}
 .upzone:hover{border-color:var(--tm-bg);background:var(--tm-l);}
 .upzone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
-.uz-icon{font-size:32px;margin-bottom:10px;}
-.uz-title{font-size:16px;font-weight:700;margin-bottom:5px;}
-.uz-sub{font-size:12px;color:var(--t2);margin-bottom:14px;line-height:1.5;}
-.uz-btn{background:var(--t1);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-family:var(--body);font-size:12px;font-weight:600;cursor:pointer;}
-.uz-cols{background:var(--s2);border-radius:8px;padding:11px 13px;text-align:left;margin-top:14px;}
-.uz-ct{font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;}
+.uz-icon{font-size:30px;margin-bottom:12px;}
+.uz-title{font-size:17px;font-weight:700;margin-bottom:6px;letter-spacing:-.01em;}
+.uz-sub{font-size:12px;color:var(--t2);margin-bottom:18px;line-height:1.6;}
+.uz-btn{background:var(--ink);color:var(--onink);border:none;border-radius:9px;padding:10px 24px;font-family:var(--body);font-size:12px;font-weight:700;cursor:pointer;display:inline-block;}
+.uz-cols{background:var(--s2);border:1px solid var(--b1);border-radius:10px;padding:12px 14px;text-align:left;margin-top:18px;}
+.uz-ct{font-size:9.5px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;}
 .uz-cl{display:flex;flex-wrap:wrap;gap:5px;}
-.uz-c{font-family:var(--mono);font-size:10px;background:var(--s1);border:1px solid var(--b1);border-radius:4px;padding:2px 7px;color:var(--t2);}
+.uz-c{font-family:var(--mono);font-size:10px;background:var(--s1);border:1px solid var(--b1);border-radius:5px;padding:3px 8px;color:var(--t2);}
 
 /* MAIN */
-.main{padding:18px 22px;max-width:1500px;margin:0 auto;}
+.main{padding:18px 22px 40px;max-width:1560px;margin:0 auto;}
 
 /* SUMMARY */
-.sumbar{display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;}
-.scard{background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:9px 13px;display:flex;align-items:center;gap:7px;}
-.sdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
-.sval{font-size:18px;font-weight:700;font-family:var(--mono);line-height:1;}
-.slbl{font-size:9px;color:var(--t3);margin-top:1px;text-transform:uppercase;letter-spacing:.05em;}
-.stotal{background:var(--t1);}.stotal .sval,.stotal .slbl{color:#fff;}
+.sumbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.scard{background:var(--s1);border:1px solid var(--b1);border-radius:11px;padding:9px 14px;display:flex;align-items:center;gap:9px;box-shadow:var(--sh1);min-width:104px;}
+.sdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.sval{font-size:19px;font-weight:600;font-family:var(--mono);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em;}
+.slbl{font-size:9px;color:var(--t3);margin-top:3px;text-transform:uppercase;letter-spacing:.09em;font-weight:600;}
+.stotal{background:var(--ink);border-color:var(--ink);}
+.stotal .sval{color:var(--onink);}
+.stotal .slbl{color:var(--onink);opacity:.6;}
 
 /* TOOLBAR */
-.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
-.vtoggle{display:flex;background:var(--s1);border:1px solid var(--b1);border-radius:8px;overflow:hidden;}
-.vt{padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;border:none;color:var(--t2);font-family:var(--body);transition:all .15s;white-space:nowrap;}
-.vt.on{background:var(--t1);color:#fff;}
-.filters{display:flex;gap:5px;flex-wrap:wrap;align-items:center;}
-.flbl{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;}
-.fbtn{background:var(--s1);border:1px solid var(--b1);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--body);color:var(--t2);transition:all .1s;}
-.fbtn:hover{border-color:var(--b2);color:var(--t1);}
-.fbtn.on{background:var(--t1);color:#fff;border-color:var(--t1);}
-.fsearch{background:var(--s1);border:1px solid var(--b1);border-radius:7px;padding:5px 11px;font-family:var(--body);font-size:11px;color:var(--t1);outline:none;width:160px;}
-.fsearch:focus{border-color:var(--b2);}
+.toolbar{position:sticky;top:57px;z-index:50;display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;background:var(--bg);padding:8px 0;border-bottom:1px solid var(--b1);}
+.vtoggle{display:flex;background:var(--s2);border:1px solid var(--b1);border-radius:9px;padding:2px;gap:2px;}
+.vt{padding:6px 14px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;border:none;color:var(--t2);font-family:var(--body);transition:all .15s;white-space:nowrap;border-radius:7px;}
+.vt:hover{color:var(--t1);}
+.vt.on{background:var(--s1);color:var(--t1);box-shadow:var(--sh1);}
+.filters{display:flex;gap:5px;flex-wrap:wrap;align-items:center;flex:1;}
+.flbl{font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.1em;margin-right:2px;}
+.fbtn{background:transparent;border:1px solid var(--b1);border-radius:20px;padding:5px 13px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--body);color:var(--t2);transition:all .12s;}
+.fbtn:hover{border-color:var(--b2);color:var(--t1);background:var(--s1);}
+.fbtn.on{background:var(--ink);color:var(--onink);border-color:var(--ink);}
+.fsearch{margin-left:auto;background:var(--s1);border:1px solid var(--b1);border-radius:20px;padding:6px 14px;font-family:var(--body);font-size:11px;color:var(--t1);outline:none;width:190px;}
+.fsearch::placeholder{color:var(--t4);}
+.fsearch:focus{border-color:var(--tm-bg);}
 
 /* DAY GRID */
-.albgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
-.albcard{background:var(--s1);border:1px solid var(--b1);border-radius:var(--rl);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);}
-.albhead{padding:11px 15px;border-bottom:1px solid var(--b1);display:flex;justify-content:space-between;align-items:center;}
-.albname{font-size:13px;font-weight:700;}
+.albgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;align-items:start;}
+.albcard{background:var(--s1);border:1px solid var(--b1);border-radius:var(--rl);overflow:hidden;box-shadow:var(--sh2);}
+.albhead{padding:13px 16px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.albname{font-size:14.5px;font-weight:700;letter-spacing:-.015em;}
 .albstats{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;}
-.astat{font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;}
-.tsec{border-bottom:1px solid var(--b1);}
-.tsec:last-child{border-bottom:none;}
-.tsec-hdr{display:flex;align-items:center;justify-content:space-between;padding:9px 15px 7px;}
-.tsec-hdr.tm{background:var(--tm-bg);}
-.tsec-hdr.tt{background:var(--tt-bg);}
-.tsec-hdr.tn{background:var(--tn-bg);}
-.tsec-hdr.td{background:var(--td-bg);}
-.tsec-hdr.tdn{background:var(--tdn-bg);}
-.tname{font-size:11px;font-weight:700;color:#fff;letter-spacing:.04em;}
-.thours{font-size:9px;color:rgba(255,255,255,.6);font-family:var(--mono);}
-.cov{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;}
-.cov-ok{background:rgba(255,255,255,.2);color:#fff;}
-.cov-warn{background:#FEF3C7;color:#92400E;}
-.cov-crit{background:#FEE2E2;color:#991B1B;}
-.cov-over{background:rgba(255,255,255,.25);color:#fff;}
-.active-now{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.2);color:#fff;}
-.adot{width:5px;height:5px;border-radius:50%;background:#4ADE80;animation:pulse 1.5s infinite;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
-.vrow{display:flex;flex-wrap:wrap;gap:4px;padding:7px 15px 9px;background:rgba(0,0,0,.02);}
-.vchip{font-size:10px;font-weight:600;padding:4px 9px;border-radius:7px;display:inline-flex;align-items:center;gap:4px;cursor:pointer;border:1px solid transparent;transition:all .12s;}
-.vchip.tm{background:var(--tm-l);color:var(--tm-t);border-color:var(--tm-b);}
-.vchip.tt{background:var(--tt-l);color:var(--tt-t);border-color:var(--tt-b);}
-.vchip.tn{background:var(--tn-l);color:var(--tn-t);border-color:var(--tn-b);}
-.vchip.td{background:var(--td-l);color:var(--td-t);border-color:var(--td-b);}
-.vchip.tdn{background:var(--tdn-l);color:var(--tdn-t);border-color:var(--tdn-b);}
-.vchip:hover{opacity:.8;}
-.rbadge{font-size:7px;font-weight:800;padding:1px 4px;border-radius:3px;letter-spacing:.05em;flex-shrink:0;}
+.astat{font-size:9.5px;font-weight:700;padding:3px 7px;border-radius:6px;font-family:var(--mono);}
+.tsec{border-top:1px solid var(--b1);}
+.tsec-hdr{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 16px;background:var(--shl);border-left:3px solid var(--sh);}
+.tsec-hdr.tm{--sh:var(--tm-bg);--shl:var(--tm-l);--sht:var(--tm-t);}
+.tsec-hdr.tt{--sh:var(--tt-bg);--shl:var(--tt-l);--sht:var(--tt-t);}
+.tsec-hdr.tn{--sh:var(--tn-bg);--shl:var(--tn-l);--sht:var(--tn-t);}
+.tsec-hdr.td{--sh:var(--td-bg);--shl:var(--td-l);--sht:var(--td-t);}
+.tsec-hdr.tdn{--sh:var(--tdn-bg);--shl:var(--tdn-l);--sht:var(--tdn-t);}
+.tsec-hdr.tv{background:var(--tv-bg);}
+.tsec-hdr.te{background:var(--te-bg);}
+.tname{font-size:11px;font-weight:700;color:var(--sht);letter-spacing:.05em;text-transform:uppercase;}
+.thours{font-size:9.5px;color:var(--sht);opacity:.65;font-family:var(--mono);}
+.cov{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;font-family:var(--mono);}
+.cov-ok,.cov-over{background:color-mix(in srgb,var(--sh) 14%,transparent);color:var(--sht);}
+.cov-warn{background:var(--tt-bg);color:#fff;}
+.cov-crit{background:var(--al);color:#fff;}
+.active-now{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;background:color-mix(in srgb,var(--sh) 14%,transparent);color:var(--sht);text-transform:uppercase;letter-spacing:.06em;}
+.adot{width:5px;height:5px;border-radius:50%;background:var(--td-bg);animation:pulse 1.6s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+.vrow{display:flex;flex-wrap:wrap;gap:5px;padding:11px 16px;}
+.vchip{font-size:11px;font-weight:600;padding:5px 10px;border-radius:8px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;border:1px solid var(--b1);background:var(--s2);color:var(--t1);transition:all .12s;}
+.vchip.tm{border-color:var(--tm-b);}
+.vchip.tt{border-color:var(--tt-b);}
+.vchip.tn{border-color:var(--tn-b);}
+.vchip.td{border-color:var(--td-b);}
+.vchip.tdn{border-color:var(--tdn-b);}
+.vchip.tv{background:var(--tv-l);color:var(--tv-t);border-color:var(--tv-b);}
+.vchip.te{background:var(--te-l);color:var(--te-t);border-color:var(--te-b);}
+.te-tag{font-size:7px;font-weight:800;padding:1px 4px;border-radius:3px;letter-spacing:.05em;background:var(--te-bg);color:#fff;flex-shrink:0;}
+.te-note{font-size:10px;font-weight:600;color:var(--te-t);}
+.te-toggle{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:9px;}
+.modal-wide{width:600px;}
+.hbtn-sug{background:rgba(15,118,110,.18);border-color:rgba(15,118,110,.35);color:#5EEAD4;}
+.sug-ok{background:var(--ok-bg);color:var(--ok);border-radius:var(--r);padding:13px;font-size:12px;font-weight:600;text-align:center;margin-top:13px;}
+.sug-sum{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 4px;}
+.sug-pill{font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;background:var(--s3);color:var(--t2);}
+.sug-pill.ok{background:var(--ok-bg);color:var(--ok);}
+.sug-pill.warn{background:var(--fal-bg);color:var(--fal);}
+.sug-day{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin:13px 0 5px;padding-bottom:4px;border-bottom:1px solid var(--b1);}
+.sug-row{display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:11px;border-bottom:1px solid var(--b1);}
+.sug-row:last-child{border-bottom:none;}
+.sug-slot{font-size:9px;font-weight:800;color:#fff;padding:2px 6px;border-radius:4px;flex-shrink:0;width:30px;text-align:center;}
+.sug-alb{font-weight:700;width:78px;flex-shrink:0;}
+.sug-nom{flex:1;color:var(--t2);}
+.sug-tipo{font-size:9px;font-weight:600;color:var(--t3);text-align:right;}
+.sug-tipo.warn{color:var(--al);font-weight:800;}
+.sug-carga{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+.sug-cchip{font-size:10px;background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:3px 8px;color:var(--t2);}
+.sug-cchip b{color:var(--t1);}
+@media(max-width:640px){.modal-wide{width:95vw;}.sug-alb{width:60px;}.sug-tipo{display:none;}}
+.te-opt{padding:8px 6px;border-radius:var(--r);text-align:center;cursor:pointer;font-size:11px;font-weight:700;border:2px solid transparent;background:var(--s2);color:var(--t2);font-family:var(--body);transition:all .15s;line-height:1.35;}
+.te-opt span{font-size:9px;font-weight:500;opacity:.75;}
+.te-opt.on{border-color:var(--te-bg);background:var(--te-l);color:var(--te-t);}
+.com-assigned.is-te{background:var(--te-l);color:var(--te-t);border-color:var(--te-b);}
+.com-assigned.is-te .com-assigned-alb{color:var(--te-t);}
+.desc-tag{font-size:7px;font-weight:800;padding:1px 4px;border-radius:3px;letter-spacing:.05em;background:var(--s3);color:var(--t2);border:1px solid var(--b2);flex-shrink:0;}
+.rot-tag{font-size:8px;font-weight:800;padding:0 3px;border-radius:3px;background:var(--jt-bg);color:var(--jt);border:1px solid var(--jt-b);flex-shrink:0;}
+.blk-tag{font-size:8px;font-weight:800;padding:1px 5px;border-radius:3px;background:var(--al-bg);color:var(--al);border:1px solid var(--al-b);flex-shrink:0;}
+.ts-btn.dis{opacity:.4;cursor:not-allowed;background:var(--s3);color:var(--t3);border-color:transparent;}
+.cfl-box{background:var(--al-bg);border:1px solid var(--al-b);border-radius:var(--rl);padding:11px 14px;margin-bottom:12px;}
+.cfl-hd{font-size:12px;font-weight:700;color:var(--al);margin-bottom:7px;}
+.cfl-list{display:flex;flex-wrap:wrap;gap:5px;}
+.cfl-item{font-size:10px;font-weight:600;background:var(--s1);color:var(--al);border:1px solid var(--al-b);border-radius:6px;padding:3px 9px;cursor:pointer;transition:all .12s;}
+.cfl-item:hover{background:var(--al);color:#fff;}
+.com-rest{background:var(--s3);border:1px dashed var(--b2);border-radius:var(--r);padding:4px 8px;font-size:9px;font-weight:600;color:var(--t2);cursor:pointer;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-height:36px;transition:all .15s;}
+.com-rest:hover{background:var(--vc-bg);border-color:var(--vc-b);color:var(--vc);}
+.exp-range{display:flex;gap:8px;margin-top:7px;}
+.exp-range label{flex:1;display:flex;flex-direction:column;gap:3px;font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;}
+.exp-range input{background:var(--s2);border:1px solid var(--b1);border-radius:var(--r);padding:7px 9px;font-family:var(--body);font-size:12px;color:var(--t1);outline:none;}
+.exp-range input:focus{border-color:var(--b2);}
+.vchip:hover{background:var(--s3);border-color:var(--b2);}
+.rbadge{font-size:8px;font-weight:800;padding:1px 4px;border-radius:4px;letter-spacing:.06em;flex-shrink:0;}
 .rbadge.jt{background:var(--jt-bg);color:var(--jt);border:1px solid var(--jt-b);}
 .rbadge.vc{background:var(--vc-bg);color:var(--vc);border:1px solid var(--vc-b);}
-.apoyo-tag{font-size:7px;font-weight:700;color:#92400E;background:#FEF3C7;border-radius:3px;padding:0 3px;}
-.asign-sec{border-top:1px solid var(--b1);padding:7px 15px;display:flex;align-items:center;justify-content:space-between;gap:6px;background:var(--s2);}
-.asign-warn{font-size:10px;font-weight:700;color:var(--al);}
-.asign-btn{background:var(--t1);color:#fff;border:none;border-radius:6px;padding:5px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--body);}
-.asign-btn.warning{background:var(--al);}
-.absent-sec{padding:8px 15px 10px;border-top:1px dashed var(--b1);background:var(--s2);}
-.absent-title{font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;}
-.absent-chips{display:flex;flex-wrap:wrap;gap:3px;}
-.achip{font-size:9px;font-weight:600;padding:2px 8px;border-radius:5px;display:inline-flex;align-items:center;gap:3px;cursor:pointer;border:1px solid transparent;}
+.apoyo-tag{font-size:8px;font-weight:700;color:var(--t2);background:var(--s3);border-radius:4px;padding:1px 4px;}
+.asign-sec{padding:0 16px 11px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.asign-warn{font-size:10.5px;font-weight:700;color:var(--al);}
+.asign-btn{background:var(--s2);color:var(--t1);border:1px solid var(--b1);border-radius:8px;padding:5px 12px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:var(--body);transition:all .12s;}
+.asign-btn:hover{background:var(--s3);border-color:var(--b2);}
+.asign-btn.warning{background:var(--al);color:#fff;border-color:var(--al);}
+.absent-sec{padding:12px 16px 14px;border-top:1px solid var(--b1);background:var(--s2);}
+.absent-title{font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:7px;}
+.absent-chips{display:flex;flex-wrap:wrap;gap:4px;}
+.achip{font-size:10px;font-weight:600;padding:3px 9px;border-radius:7px;display:inline-flex;align-items:center;gap:4px;cursor:pointer;border:1px solid transparent;}
 .achip.desc{background:var(--s3);color:var(--t2);border-color:var(--b1);}
 .achip.vac{background:var(--vac-bg);color:var(--vac);border-color:var(--vac-b);}
 .achip.inc{background:var(--inc-bg);color:var(--inc);border-color:var(--inc-b);}
@@ -205,106 +480,111 @@ body{font-family:var(--body);background:var(--bg);color:var(--t1);font-size:14px
 .achip.per{background:var(--per-bg);color:var(--per);border-color:var(--per-b);}
 
 /* WEEK VIEW */
-.week-wrap{overflow-x:auto;}
-.wtable{border-collapse:collapse;width:100%;min-width:700px;background:var(--s1);border-radius:var(--rl);overflow:hidden;border:1px solid var(--b1);}
-.wtable th{background:var(--t1);color:#fff;padding:8px 8px;font-size:10px;font-weight:600;text-align:center;white-space:nowrap;}
-.wtable th.today-h{background:var(--tm-bg);}
-.wtable th.rhdr{text-align:left;width:120px;}
-.wtable td{padding:6px 8px;border-bottom:1px solid var(--b1);border-right:1px solid var(--b1);vertical-align:top;font-size:10px;}
+.week-wrap{overflow-x:auto;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rl);box-shadow:var(--sh2);}
+.wtable{border-collapse:collapse;width:100%;min-width:760px;background:var(--s1);}
+.wtable th{background:var(--s2);color:var(--t2);padding:10px 8px;font-size:9.5px;font-weight:700;text-align:center;white-space:nowrap;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--b1);}
+.wtable th.today-h{background:var(--tm-l);color:var(--tm-t);}
+.wtable th.rhdr{text-align:left;width:140px;}
+.wtable td{padding:7px 9px;border-bottom:1px solid var(--b1);border-right:1px solid var(--b1);vertical-align:top;font-size:10px;}
 .wtable td:last-child{border-right:none;}
 .wtable tr:last-child td{border-bottom:none;}
-.walb td{background:var(--s2);font-weight:700;font-size:11px;padding:8px 10px;}
-.wname{font-size:9px;color:var(--t1);line-height:1.5;}
+.walb td{background:var(--s2);font-weight:700;font-size:11.5px;padding:9px 12px;letter-spacing:-.01em;}
+.wname{font-size:9.5px;color:var(--t1);line-height:1.65;}
 .wname.jt{color:var(--jt);font-weight:700;}
 .wname.vc{color:var(--vc);font-weight:700;}
-.wcov{font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;margin-top:2px;display:inline-block;}
-.wtoday{background:#EFF6FF!important;}
+.wcov{font-size:8.5px;font-weight:700;padding:1px 5px;border-radius:4px;margin-top:3px;display:inline-block;font-family:var(--mono);}
+.wcov.cov-ok,.wcov.cov-over{background:var(--s3);color:var(--t2);}
+.wtoday{background:var(--today-bg)!important;}
 
 /* COMODIN PANEL */
-.com-panel{background:var(--s1);border:1px solid var(--b1);border-radius:var(--rl);overflow:hidden;margin-bottom:16px;}
-.com-panel-hdr{padding:14px 18px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
-.com-panel-title{font-size:14px;font-weight:700;}
-.com-status-bar{display:flex;gap:8px;flex-wrap:wrap;}
-.cs-badge{font-size:11px;font-weight:600;padding:4px 12px;border-radius:6px;}
+.com-panel{background:var(--s1);border:1px solid var(--b1);border-radius:var(--rl);overflow:hidden;margin-bottom:16px;box-shadow:var(--sh2);}
+.com-panel-hdr{padding:15px 18px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+.com-panel-title{font-size:15px;font-weight:700;letter-spacing:-.015em;}
+.com-status-bar{display:flex;gap:6px;flex-wrap:wrap;}
+.cs-badge{font-size:10.5px;font-weight:700;padding:4px 11px;border-radius:20px;}
 .cs-ok{background:var(--ok-bg);color:var(--ok);}
 .cs-warn{background:var(--inc-bg);color:var(--inc);}
 .com-week-wrap{overflow-x:auto;}
-.com-table{border-collapse:collapse;width:100%;min-width:700px;}
-.com-table th{background:var(--t1);color:#fff;padding:8px 10px;font-size:10px;font-weight:600;text-align:center;white-space:nowrap;}
-.com-table th.today-h{background:var(--tm-bg);}
-.com-table th.name-h{text-align:left;width:150px;min-width:150px;}
+.com-table{border-collapse:collapse;width:100%;min-width:760px;}
+.com-table th{background:var(--s2);color:var(--t2);padding:10px;font-size:9.5px;font-weight:700;text-align:center;white-space:nowrap;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--b1);}
+.com-table th.today-h{background:var(--tm-l);color:var(--tm-t);}
+.com-table th.name-h{text-align:left;width:160px;min-width:160px;}
 .com-table td{padding:7px 8px;border-bottom:1px solid var(--b1);border-right:1px solid var(--b1);vertical-align:middle;}
 .com-table td:last-child{border-right:none;}
 .com-table tr:last-child td{border-bottom:none;}
-.com-name-cell{font-size:11px;font-weight:600;padding:7px 12px;}
-.com-assigned{background:var(--vc-bg);border-radius:6px;padding:4px 8px;font-size:10px;font-weight:600;color:var(--vc);cursor:pointer;display:flex;flex-direction:column;gap:1px;border:1px solid var(--vc-b);}
-.com-assigned:hover{opacity:.8;}
-.com-assigned-alb{font-size:8px;color:var(--vc);opacity:.7;}
-.com-empty{background:var(--al-bg);border:1px dashed var(--al-b);border-radius:6px;padding:4px 8px;font-size:9px;font-weight:700;color:var(--al);cursor:pointer;text-align:center;display:flex;align-items:center;justify-content:center;gap:4px;min-height:36px;}
-.com-empty:hover{background:#FECACA;}
-.com-unavail{background:var(--s3);border-radius:6px;padding:4px 8px;font-size:9px;color:var(--t4);text-align:center;min-height:36px;display:flex;align-items:center;justify-content:center;}
-.com-today{background:#EFF6FF!important;}
-.com-week-nav{display:flex;align-items:center;gap:6px;}
-.com-week-nav button{background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:4px 10px;cursor:pointer;font-family:var(--body);font-size:13px;color:var(--t2);}
-.com-week-nav button:hover{background:var(--s3);}
-.com-week-label{font-size:11px;font-family:var(--mono);color:var(--t2);}
+.com-name-cell{font-size:11.5px;font-weight:600;padding:8px 12px;}
+.com-assigned{background:var(--vc-bg);border-radius:8px;padding:5px 9px;font-size:10px;font-weight:700;color:var(--vc);cursor:pointer;display:flex;flex-direction:column;gap:1px;border:1px solid var(--vc-b);}
+.com-assigned:hover{border-color:var(--vc);}
+.com-assigned-alb{font-size:8.5px;color:var(--vc);opacity:.7;font-weight:600;}
+.com-empty{background:transparent;border:1px dashed var(--b2);border-radius:8px;padding:5px 9px;font-size:9px;font-weight:700;color:var(--al);cursor:pointer;text-align:center;display:flex;align-items:center;justify-content:center;gap:4px;min-height:36px;}
+.com-empty:hover{background:var(--al-bg);border-color:var(--al);}
+.com-unavail{background:var(--s2);border-radius:8px;padding:5px 9px;font-size:9px;color:var(--t4);text-align:center;min-height:36px;display:flex;align-items:center;justify-content:center;}
+.com-today{background:var(--today-bg)!important;}
+.com-week-nav{display:flex;align-items:center;gap:4px;}
+.com-week-nav button{background:var(--s2);border:1px solid var(--b1);border-radius:7px;padding:4px 11px;cursor:pointer;font-family:var(--body);font-size:13px;color:var(--t2);}
+.com-week-nav button:hover{background:var(--s3);color:var(--t1);}
+.com-week-label{font-size:10.5px;font-family:var(--mono);color:var(--t2);}
 
 /* MODALS */
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;}
+.modal-bg{position:fixed;inset:0;background:rgba(8,11,16,.55);backdrop-filter:blur(3px);z-index:300;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .18s;padding:16px;}
 .modal-bg.on{opacity:1;pointer-events:all;}
-.modal{background:var(--s1);border-radius:var(--rl);width:420px;max-width:95vw;padding:20px;box-shadow:0 24px 80px rgba(0,0,0,.25);max-height:90vh;overflow-y:auto;}
-.modal h3{font-size:15px;font-weight:700;margin-bottom:3px;}
-.msub{font-size:11px;color:var(--t2);margin-bottom:16px;}
-.mlabel{font-size:10px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px;display:block;}
-.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px;}
-.sopt{padding:9px 6px;border-radius:8px;text-align:center;cursor:pointer;font-size:11px;font-weight:600;border:2px solid transparent;transition:all .15s;}
+.modal{background:var(--s1);border:1px solid var(--b1);border-radius:16px;width:440px;max-width:95vw;padding:22px;box-shadow:0 32px 90px rgba(0,0,0,.3);max-height:90vh;overflow-y:auto;}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:3px;letter-spacing:-.015em;}
+.msub{font-size:11.5px;color:var(--t2);margin-bottom:18px;}
+.mlabel{font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;display:block;}
+.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:4px;}
+.sopt{padding:11px 6px;border-radius:10px;text-align:center;cursor:pointer;font-size:11.5px;font-weight:600;border:1.5px solid var(--b1);transition:all .15s;}
 .sopt.s-none{background:var(--s2);color:var(--t2);}.sopt.s-none.on{border-color:var(--t2);}
-.sopt.s-inc{background:var(--inc-bg);color:var(--inc);}.sopt.s-inc.on{border-color:var(--inc);}
-.sopt.s-fal{background:var(--fal-bg);color:var(--fal);}.sopt.s-fal.on{border-color:var(--fal);}
-.sopt.s-per{background:var(--per-bg);color:var(--per);}.sopt.s-per.on{border-color:var(--per);}
-.mactions{display:flex;gap:7px;margin-top:14px;}
-.mbtn{flex:1;padding:10px;border-radius:8px;font-family:var(--body);font-size:12px;font-weight:700;cursor:pointer;border:none;}
-.mbtn.pri{background:var(--t1);color:#fff;}
-.mbtn.sec{background:var(--s2);color:var(--t2);}
-.mbtn.danger{background:var(--inc);color:#fff;}
-.msearch{width:100%;background:var(--s2);border:1px solid var(--b1);border-radius:7px;padding:7px 11px;font-family:var(--body);font-size:12px;color:var(--t1);outline:none;margin-bottom:9px;}
+.sopt.s-inc{background:var(--inc-bg);color:var(--inc);border-color:var(--inc-b);}.sopt.s-inc.on{border-color:var(--inc);}
+.sopt.s-fal{background:var(--fal-bg);color:var(--fal);border-color:var(--fal-b);}.sopt.s-fal.on{border-color:var(--fal);}
+.sopt.s-per{background:var(--per-bg);color:var(--per);border-color:var(--per-b);}.sopt.s-per.on{border-color:var(--per);}
+.mactions{display:flex;gap:8px;margin-top:16px;}
+.mbtn{flex:1;padding:11px;border-radius:10px;font-family:var(--body);font-size:12px;font-weight:700;cursor:pointer;border:1px solid transparent;}
+.mbtn.pri{background:var(--ink);color:var(--onink);}
+.mbtn.sec{background:var(--s2);color:var(--t2);border-color:var(--b1);}
+.mbtn.sec:hover{background:var(--s3);color:var(--t1);}
+.mbtn.danger{background:var(--al);color:#fff;}
+.msearch{width:100%;background:var(--s2);border:1px solid var(--b1);border-radius:9px;padding:9px 12px;font-family:var(--body);font-size:12px;color:var(--t1);outline:none;margin-bottom:10px;}
+.msearch:focus{border-color:var(--tm-bg);}
 .mfilters{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;}
-.mfbtn{background:var(--s2);border:1px solid var(--b1);border-radius:5px;padding:3px 8px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--body);color:var(--t2);}
-.mfbtn.on{background:var(--t1);color:#fff;border-color:var(--t1);}
-.mlist{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto;}
-.mopt{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;border:1.5px solid transparent;background:var(--s2);transition:all .1s;}
+.mfbtn{background:transparent;border:1px solid var(--b1);border-radius:20px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--body);color:var(--t2);}
+.mfbtn.on{background:var(--ink);color:var(--onink);border-color:var(--ink);}
+.mlist{display:flex;flex-direction:column;gap:5px;max-height:280px;overflow-y:auto;}
+.mopt{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;cursor:pointer;border:1.5px solid var(--b1);background:var(--s2);transition:all .1s;}
 .mopt:hover{background:var(--s3);}
-.mopt.sel{background:var(--vc-bg);border-color:var(--vc-b);}
-.mopt.unavail{opacity:.35;cursor:not-allowed;}
+.mopt.sel{background:var(--vc-bg);border-color:var(--vc);}
+.mopt.unavail{opacity:.35;cursor:not-allowed;pointer-events:none;}
 .mo-name{font-size:12px;font-weight:600;flex:1;}
 .mo-meta{font-size:10px;color:var(--t3);}
-.mo-tag{font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;}
+.mo-tag{font-size:9px;font-weight:700;padding:2px 6px;border-radius:5px;}
 .mo-same{background:var(--td-l);color:var(--td-t);}
 .mo-other{background:var(--fal-bg);color:var(--fal);}
-.rem-btn{background:var(--inc-bg);color:var(--inc);border:1px solid var(--inc-b);border-radius:6px;padding:5px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--body);margin-top:7px;width:100%;}
+.rem-btn{background:var(--inc-bg);color:var(--inc);border:1px solid var(--inc-b);border-radius:9px;padding:8px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:var(--body);margin-top:9px;width:100%;}
 
 /* COMODIN ASSIGN MODAL extras */
-.turno-sel{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;}
-.ts-btn{padding:9px 5px;border-radius:8px;text-align:center;cursor:pointer;font-size:11px;font-weight:600;border:2px solid transparent;background:var(--s2);color:var(--t2);transition:all .15s;}
+.turno-sel{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:12px;}
+.ts-btn{padding:10px 5px;border-radius:10px;text-align:center;cursor:pointer;font-size:11.5px;font-weight:600;border:1.5px solid var(--b1);background:var(--s2);color:var(--t2);transition:all .15s;}
 .ts-btn.on{border-color:var(--vc);background:var(--vc-bg);color:var(--vc);}
-.alb-sel{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;margin-bottom:10px;}
-.as-btn{padding:7px 5px;border-radius:7px;text-align:center;cursor:pointer;font-size:10px;font-weight:600;border:1.5px solid transparent;background:var(--s2);color:var(--t2);transition:all .15s;}
-.as-btn.on{border-color:var(--t1);background:var(--t1);color:#fff;}
+.alb-sel{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:12px;}
+.as-btn{padding:8px 5px;border-radius:9px;text-align:center;cursor:pointer;font-size:10.5px;font-weight:600;border:1.5px solid var(--b1);background:var(--s2);color:var(--t2);transition:all .15s;}
+.as-btn.on{border-color:var(--ink);background:var(--ink);color:var(--onink);}
 
 /* EXPORT */
-.exp-opts{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:7px 0 13px;}
-.exp-opt{padding:9px;border-radius:8px;text-align:center;cursor:pointer;font-size:11px;font-weight:600;border:2px solid var(--b1);background:var(--s2);color:var(--t2);transition:all .15s;}
-.exp-opt.on{border-color:var(--t1);background:var(--t1);color:#fff;}
-.exp-albs{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:7px;}
-.exp-alb{padding:7px 5px;border-radius:7px;text-align:center;cursor:pointer;font-size:10px;font-weight:600;border:1.5px solid var(--b1);background:var(--s2);color:var(--t2);transition:all .15s;}
-.exp-alb.on{border-color:var(--t1);background:var(--t1);color:#fff;}
+.exp-opts{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:8px 0 14px;}
+.exp-opt{padding:10px;border-radius:10px;text-align:center;cursor:pointer;font-size:11px;font-weight:600;border:1.5px solid var(--b1);background:var(--s2);color:var(--t2);transition:all .15s;}
+.exp-opt.on{border-color:var(--ink);background:var(--ink);color:var(--onink);}
+.exp-albs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;}
+.exp-alb{padding:8px 5px;border-radius:9px;text-align:center;cursor:pointer;font-size:10px;font-weight:600;border:1.5px solid var(--b1);background:var(--s2);color:var(--t2);transition:all .15s;}
+.exp-alb.on{border-color:var(--ink);background:var(--ink);color:var(--onink);}
 
-.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(12px);background:var(--t1);color:#fff;padding:8px 18px;border-radius:18px;font-size:11px;font-weight:600;z-index:500;opacity:0;transition:all .25s;pointer-events:none;}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(12px);background:var(--ink);color:var(--onink);padding:10px 20px;border-radius:20px;font-size:11.5px;font-weight:700;z-index:500;opacity:0;transition:all .25s;pointer-events:none;box-shadow:var(--sh2);}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
-@media(max-width:600px){.hdr{padding:10px 12px;}.main{padding:12px;}.albgrid{grid-template-columns:1fr;}}
+@media(max-width:640px){.hdr{padding:10px 13px;}.main{padding:13px;}.albgrid{grid-template-columns:1fr;}.toolbar{position:static;}.fsearch{margin-left:0;width:100%;}}
 </style>
 </head>
 <body>
+
+
 
 <div class="hdr">
   <div class="hbrand">
@@ -314,14 +594,16 @@ body{font-family:var(--body);background:var(--bg);color:var(--t1);font-size:14px
   <div class="hright">
     <div class="datenav">
       <button onclick="changeDay(-1)">‹</button>
-      <div class="datedisp" id="datedisp" style="cursor:pointer;" onclick="openDatePicker()">—</div>
-      <input type="date" id="datepicker" style="opacity:0;width:0;height:0;position:absolute;padding:0;border:none;pointer-events:none;" onchange="selectDate(this.value)">
+      <div class="datedisp" id="datedisp">—</div>
       <button onclick="changeDay(1)">›</button>
     </div>
     <button class="hbtn" onclick="goToday()">Hoy</button>
+    <button class="hbtn themebtn" id="btn-theme" onclick="toggleTheme()" title="Cambiar tema">◐</button>
     <button class="hbtn hbtn-exp" id="btn-exp" style="display:none" onclick="openMod('m-export')">📤 Exportar</button>
     <div class="hbtn reup" id="btn-vigs" style="display:none"><input type="file" accept=".xlsx,.xls,.csv" onchange="handleFile(this)">📂 Excel</div>
     <div class="hbtn reup" id="btn-vac" style="display:none"><input type="file" accept=".xlsx,.xls,.csv" onchange="handleVacFile(this)">🏖 Vacaciones</div>
+    <button class="hbtn hbtn-sug" id="btn-sug" style="display:none" onclick="openSug()">💡 Sugerir</button>
+    <button class="hbtn" id="btn-hist" style="display:none" onclick="openMod('m-hist')">🧹 Historial</button>
     <button class="hbtn hbtn-del" id="btn-del" style="display:none" onclick="openMod('m-del')">🗑</button>
   </div>
 </div>
@@ -350,6 +632,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--t1);font-size:14px
 <!-- DASHBOARD -->
 <div id="scr-dash" style="display:none">
   <div class="main">
+    <div id="conflict-bar"></div>
     <div class="sumbar" id="sumbar"></div>
     <div class="toolbar">
       <div class="vtoggle">
@@ -406,6 +689,7 @@ body{font-family:var(--body);background:var(--bg);color:var(--t1);font-size:14px
   <div class="modal">
     <h3>Asignar vigilante</h3>
     <div class="msub" id="ma-sub">—</div>
+    <div class="te-toggle" id="ma-te"></div>
     <input class="msearch" id="ma-search" placeholder="Buscar..." oninput="renderAsignList()">
     <div class="mfilters" id="ma-roles"></div>
     <div class="mfilters" id="ma-albs"></div>
@@ -425,12 +709,47 @@ body{font-family:var(--body);background:var(--bg);color:var(--t1);font-size:14px
     <div class="msub" id="mcc-sub">—</div>
     <span class="mlabel">Turno</span>
     <div class="turno-sel" id="mcc-turnos"></div>
+    <div id="mcc-cubre-wrap" style="display:none"></div>
     <span class="mlabel">Albergue</span>
     <div class="alb-sel" id="mcc-albs"></div>
     <div class="mactions">
       <button class="mbtn sec" onclick="closeMod('m-com-cell')">Cancelar</button>
       <button class="rem-btn" id="mcc-remove" onclick="removeComCell()" style="display:none;margin-top:0;border-radius:8px;">✕ Quitar</button>
       <button class="mbtn pri" onclick="saveComCell()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUGERIR COBERTURA -->
+<div class="modal-bg" id="m-sug">
+  <div class="modal modal-wide">
+    <h3>Sugerir cobertura</h3>
+    <div class="msub">Prioriza comodines libres y traslados entre albergues. No llama a nadie en su día de descanso salvo que el turno se quede sin gente.</div>
+    <div class="exp-range">
+      <label>Desde<input type="date" id="sug-desde"></label>
+      <label>Hasta<input type="date" id="sug-hasta"></label>
+    </div>
+    <button class="mbtn pri" style="margin-top:11px" onclick="calcularSug()">Calcular</button>
+    <div id="sug-out"></div>
+    <div class="mactions" id="sug-actions" style="display:none">
+      <button class="mbtn sec" onclick="closeMod('m-sug')">Descartar</button>
+      <button class="mbtn pri" id="sug-apply" onclick="aplicarSug()">Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLEAR HISTORY MODAL -->
+<div class="modal-bg" id="m-hist">
+  <div class="modal">
+    <h3>Borrar historial de movimientos</h3>
+    <div class="msub">La lista de vigilantes y las vacaciones se conservan.</div>
+    <div style="background:var(--fal-bg);border:1px solid var(--fal-b);border-radius:var(--r);padding:13px;margin-bottom:4px;font-size:12px;color:var(--fal);line-height:1.7;">
+      Se borrará:<br>• Incapacidades, faltas y permisos<br>• Todas las asignaciones de turno
+    </div>
+    <div style="font-size:11px;color:var(--t2);margin-top:10px;line-height:1.6">Exporta el Excel de novedades antes de continuar si necesitas conservar el registro.</div>
+    <div class="mactions">
+      <button class="mbtn sec" onclick="closeMod('m-hist')">Cancelar</button>
+      <button class="mbtn danger" onclick="borrarHistorial()">Borrar historial</button>
     </div>
   </div>
 </div>
@@ -459,7 +778,15 @@ body{font-family:var(--body);background:var(--bg);color:var(--t1);font-size:14px
     <div class="exp-opts">
       <div class="exp-opt on" data-ev="dia" onclick="selExpV('dia',this)">📅 Imagen · Día</div>
       <div class="exp-opt" data-ev="sem" onclick="selExpV('sem',this)">📆 Imagen · Semana</div>
-      <div class="exp-opt" data-ev="novExcel" onclick="selExpV('novExcel',this)">📊 Excel · Inc/Permisos</div>
+      <div class="exp-opt" data-ev="novExcel" onclick="selExpV('novExcel',this)">📊 Excel · Novedades</div>
+    </div>
+    <div id="exp-range-wrap" style="display:none">
+      <span class="mlabel">Rango de fechas</span>
+      <div class="exp-range">
+        <label>Desde<input type="date" id="exp-desde"></label>
+        <label>Hasta<input type="date" id="exp-hasta"></label>
+      </div>
+      <div style="font-size:10px;color:var(--t3);margin-top:6px">Déjalo vacío para exportar todo el histórico.</div>
     </div>
     <div id="exp-alb-wrap">
       <span class="mlabel">Albergue</span>
@@ -489,76 +816,35 @@ const ALBS=[
   {id:'ceuta',     name:'Ceuta',     tipo:'8h', min:3},
   {id:'bellavista',name:'Bellavista',tipo:'8h', min:3},
   {id:'tayoltita', name:'Tayoltita', tipo:'8h', min:3},
-  {id:'cpo5',      name:'Campo 5',   tipo:'12h',min:3},
-  {id:'caimanes',  name:'Caimanes',  tipo:'12h',min:3},
-  {id:'capule',    name:'Capule',    tipo:'12h',min:3},
+  {id:'cpo5',      name:'Campo 5',   tipo:'8h', min:3},
+  {id:'caimanes',  name:'Caimanes',  tipo:'8h', min:3},
+  {id:'capule',    name:'Capule',    tipo:'8h', min:1},
 ];
 const TINFO={
-  TM: {label:'Mañana', cls:'tm', hdr:'tm', hours:null,         bg:'#1E3A8A',lgt:'#DBEAFE',txt:'#1E3A8A'},
-  TT: {label:'Tarde',  cls:'tt', hdr:'tt', hours:null,         bg:'#78350F',lgt:'#FEF3C7',txt:'#78350F'},
-  TN: {label:'Noche',  cls:'tn', hdr:'tn', hours:null,         bg:'#2D1B69',lgt:'#EDE9FE',txt:'#2D1B69'},
-  TD: {label:'Día',    cls:'td', hdr:'td', hours:'06:00–18:00',bg:'#064E3B',lgt:'#D1FAE5',txt:'#064E3B'},
-  TN12:{label:'Noche', cls:'tdn',hdr:'tdn',hours:'18:00–06:00',bg:'#1F2937',lgt:'#F3F4F6',txt:'#1F2937'},
+  TM: {label:'Mañana', cls:'tm', hdr:'tm', hours:'06:00–14:00',bg:'#3B60D8',lgt:'#EDF1FE',txt:'#2B47A8'},
+  TT: {label:'Tarde',  cls:'tt', hdr:'tt', hours:'14:00–22:00',bg:'#B4791C',lgt:'#FDF4E6',txt:'#8A5A11'},
+  TN: {label:'Noche',  cls:'tn', hdr:'tn', hours:'22:00–06:00',bg:'#6146C6',lgt:'#F1EEFD',txt:'#4A34A0'},
+  TE: {label:'Especial',cls:'te',hdr:'te',hours:'08:00–17:00',bg:'#0F766E',lgt:'#E6F5F3',txt:'#0B5A54'},
+  TV: {label:'Variable',cls:'tv',hdr:'tv',hours:'Requiere asignación',bg:'#4A34A0',lgt:'#F1EEFD',txt:'#4A34A0'},
 };
 const DIAS=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
 const EXCEL_EPOCH=new Date(1899,11,30);
 
 // ══════ STATE ══════
 let vigs=[],vacaciones=[],novedades={},asignaciones={};
+// Anchor date for JT weekly rotation: the turno in the Excel is the turno of the
+// week this anchor falls in. Every rotation boundary after it advances one step.
+let rotAnchor=null,rotOn=true;
 let selDate=new Date();selDate.setHours(0,0,0,0);
 let filterAlb='todos',searchTxt='',currentView='dia',comWeekOffset=0;
-let modalVigId=null,modalSt='',modalStatusDate=null;
-let maAlb=null,maTurno=null,maSel=null,maRolF='todos',maAlbF='todos';
-let mccVigId=null,mccDate=null,mccTurnoSel=null,mccAlbSel=null;
+let modalVigId=null,modalSt='';
+let maAlb=null,maTurno=null,maSel=null,maRolF='todos',maAlbF='todos',maTE=false;
+let mccVigId=null,mccDate=null,mccTurnoSel=null,mccAlbSel=null,mccCubre=null;
 let expV='dia',expA='todos';
 
 // ══════ UTILS ══════
 const dk=d=>d.toISOString().slice(0,10);
 function excelDate(n){if(!n||isNaN(n))return null;const d=new Date(EXCEL_EPOCH);d.setDate(d.getDate()+Math.round(n));d.setHours(0,0,0,0);return d;}
-
-function normId(id) {
-  if (id === null || id === undefined) return '';
-  let s = id.toString().trim();
-  if (s.endsWith('.0')) {
-    s = s.slice(0, -2);
-  }
-  return s;
-}
-
-function parseExcelDate(v) {
-  if (!v) return null;
-  if (v instanceof Date) {
-    return v;
-  }
-  if (typeof v === 'number') {
-    return excelDate(v);
-  }
-  if (typeof v === 'string') {
-    const s = v.trim();
-    if (!s) return null;
-    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-      const d = new Date(s + 'T00:00:00');
-      if (!isNaN(d.getTime())) return d;
-    }
-    const parts = s.split(/[-/]/);
-    if (parts.length === 3) {
-      if (parts[0].length === 4) {
-        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-        if (!isNaN(d.getTime())) return d;
-      } else {
-        let year = parseInt(parts[2]);
-        if (parts[2].length === 2) {
-          year += (year < 50 ? 2000 : 1900);
-        }
-        const d = new Date(year, parseInt(parts[1]) - 1, parseInt(parts[0]));
-        if (!isNaN(d.getTime())) return d;
-      }
-    }
-    const d = new Date(s);
-    if (!isNaN(d.getTime())) return d;
-  }
-  return null;
-}
 
 // Short name: first name + first surname
 function sn(nombre){
@@ -573,10 +859,47 @@ function ab(nombre){
 
 function getRol(v){const p=(v.puesto||'').toUpperCase();if(p.includes('COMODIN')||p.includes('COMODÍN'))return'vc';if(/\bVIGILANTE A\b/.test(p)||/\bVA\b/.test(p))return'jt';return'vb';}
 function isVC(v){return getRol(v)==='vc';}
-function getTK(v){const t=v.turno.toUpperCase(),a=ALBS.find(x=>x.id===v.albergue),tipo=a?a.tipo:'8h';return tipo==='12h'&&t==='TN'?'TN12':t;}
+// ══════ ROTACIÓN SEMANAL DE JEFES DE TURNO ══════
+const CYCLE=['TM','TT','TN'];
+// TE (08:00–17:00) solo traslapa parte del turno que cubre; esto es lo que queda corto.
+const TE_HUECO={TM:'06:00–08:00',TT:'17:00–22:00'};
+// Base turno straight from the Excel, no rotation applied.
+function baseTK(v){const t=(v.turno||'').toUpperCase().trim();return TINFO[t]?t:'TV';}
+function isTV(v){return baseTK(v)==='TV';}
+// A JT's rotation week starts the day AFTER their rest day.
+function rotWeekStart(date,descansoDow){
+  const boundary=(descansoDow+1)%7;
+  const d=new Date(date);d.setHours(0,0,0,0);
+  d.setDate(d.getDate()-((d.getDay()-boundary+7)%7));
+  return d;
+}
+function descansoDow(v){
+  const s=(v.diaDescanso||'').toLowerCase().trim();
+  const i=DIAS.findIndex(x=>x===s||x.startsWith(s.slice(0,3)));
+  return i<0?null:i;
+}
+// How many rotation boundaries have passed between the anchor and `date`.
+function rotSteps(v,date){
+  if(!rotOn||!rotAnchor)return 0;
+  const dow=descansoDow(v);if(dow===null)return 0;
+  const a=rotWeekStart(new Date(rotAnchor+'T12:00:00'),dow);
+  const t=rotWeekStart(date,dow);
+  return Math.round((t-a)/604800000); // ms per week
+}
+// Turno for a vigilante on a given date. Only Vigilante A (JT) rotate;
+// Vigilante B follow the monthly Excel and comodines stay on TV.
+function getTK(v,date){
+  const base=baseTK(v);
+  if(getRol(v)!=='jt'||base==='TV')return base;
+  const i=CYCLE.indexOf(base);if(i<0)return base;
+  const n=rotSteps(v,date||selDate);
+  return CYCLE[((i+n)%3+3)%3];
+}
+// True when this JT is not on their Excel turno right now (i.e. rotation moved them).
+function isRotado(v,date){return getRol(v)==='jt'&&getTK(v,date)!==baseTK(v);}
 function isDescanso(v,date){const dow=date.getDay(),d=(v.diaDescanso||'').toLowerCase().trim();return DIAS[dow]===d||DIAS[dow].startsWith(d.slice(0,3));}
 function isVac(v,date){
-  const r=vacaciones.find(x=>normId(x.empId)===normId(v.id));if(!r)return false;
+  const r=vacaciones.find(x=>String(x.empId)===String(v.id));if(!r)return false;
   const d=dk(date);
   // fecha fin = día de regreso → trabajaría ese día, so exclude only strictly before fin
   return(r.fi&&r.ff&&d>=r.fi&&d<r.ff)||(r.fi2&&r.ff2&&d>=r.fi2&&d<r.ff2);
@@ -588,7 +911,7 @@ function isActivoAhora(tk){
   const now=new Date(),h=now.getHours(),tod=new Date();tod.setHours(0,0,0,0);
   if(tod.getTime()!==selDate.getTime())return false;
   if(tk==='TM')return h>=6&&h<14;if(tk==='TT')return h>=14&&h<22;
-  if(tk==='TN'||tk==='TN12')return h>=22||h<6;if(tk==='TD')return h>=6&&h<18;return false;
+  if(tk==='TN')return h>=22||h<6;if(tk==='TE')return h>=8&&h<17;return false;
 }
 
 // Asignaciones key: vigId_date → {albId, turno}
@@ -598,30 +921,75 @@ function getAsignForVig(vid,date){return asignaciones[getAsignKey(vid,date)]||nu
 function getAsignedToSlot(albId,turno,date){
   return vigs.filter(v=>{
     const a=getAsignForVig(v.id,date);
-    return a&&a.albId===albId&&a.turno===turno;
+    if(!a||a.albId!==albId)return false;
+    // Un TE suma al turno que viene a cubrir, no a un turno propio
+    if(a.turno==='TE')return a.cubre===turno;
+    return a.turno===turno;
   });
 }
+// ¿Esta persona está cubriendo en Turno Especial esta fecha?
+function esTE(v,date){const a=getAsignForVig(v.id,date);return!!(a&&a.turno==='TE');}
 
 // Check if vig is "occupied" on a date (either working own turno or assigned elsewhere)
+// A rest day no longer blocks assignment — staff can be called in to cover.
+// Only an absence (vacation/sick/no-show/leave) or an existing assignment does.
 function isOccupied(v,date){
   if(getStatus(v,date))return true;
-  if(isDescanso(v,date))return true;
   if(getAsignForVig(v.id,date))return true; // already assigned somewhere
   return false;
 }
 
+// ══════ REGLA: TN un día → TM al día siguiente está PROHIBIDO ══════
+// TN termina 06:00 y TM arranca 06:00: serían 16 horas seguidas sin descanso.
+function addDays(date,n){const d=new Date(date);d.setHours(0,0,0,0);d.setDate(d.getDate()+n);return d;}
+// Turno que realmente cubre esa fecha, o null si no trabaja.
+function turnoTrabajado(v,date){
+  if(getStatus(v,date))return null;                 // vacaciones/inc/falta/permiso
+  const a=getAsignForVig(v.id,date);if(a)return a.turno;
+  if(isDescanso(v,date))return null;
+  if(isTV(v))return null;                           // comodín sin asignar no cubre turno
+  return getTK(v,date);
+}
+// Devuelve el motivo del choque, o null si la asignación es válida.
+function conflictoTNTM(v,turno,date){
+  // TN acaba 06:00. TM arranca 06:00 (0 h) y TE arranca 08:00 (2 h): ambos prohibidos.
+  if(turno==='TM'||turno==='TE'){
+    const ayer=addDays(date,-1);
+    if(turnoTrabajado(v,ayer)==='TN')return`Trabaja TN el ${dk(ayer)}`;
+  }
+  if(turno==='TN'){
+    const man=addDays(date,1),t=turnoTrabajado(v,man);
+    if(t==='TM'||t==='TE')return`Trabaja ${t} el ${dk(man)}`;
+  }
+  return null;
+}
+// Barre un rango de días y lista los choques ya existentes en los datos.
+function listarConflictos(desde,dias){
+  const out=[];
+  for(let i=0;i<dias;i++){
+    const d1=addDays(desde,i),d2=addDays(desde,i+1);
+    vigs.forEach(v=>{
+      const t2=turnoTrabajado(v,d2);
+      if(turnoTrabajado(v,d1)==='TN'&&(t2==='TM'||t2==='TE'))
+        out.push({v,d1:dk(d1),d2:dk(d2),t2});
+    });
+  }
+  return out;
+}
+
 // Workers for a slot: own turno vigs (non-VC) + assigned vigs
 function getSlotWorkers(albId,turnoKey,date){
-  const tAPI=turnoKey==='TN12'?'TN':turnoKey;
-  // Own turno workers (non-VC, not absent, not manually assigned elsewhere)
+  // Own turno workers: fixed-shift staff only. TV (comodines/jefes) always
+  // require an explicit assignment, so they never auto-populate a slot.
   const own=vigs.filter(v=>{
-    if(v.albergue!==albId||isVC(v))return false;
+    if(v.albergue!==albId)return false;
+    if(isVC(v)||isTV(v))return false;
     if(getStatus(v,date)||isDescanso(v,date))return false;
     if(getAsignForVig(v.id,date))return false; // moved elsewhere
-    return getTK(v)===turnoKey;
+    return getTK(v,date)===turnoKey;
   });
-  // Manually assigned to this slot
-  const assigned=getAsignedToSlot(albId,tAPI,date);
+  // Manually assigned to this slot (may include staff on their rest day)
+  const assigned=getAsignedToSlot(albId,turnoKey,date);
   return{own,assigned};
 }
 
@@ -644,6 +1012,7 @@ function normDay(raw){
 // ══════ FILE IMPORT ══════
 function handleFile(input){
   const file=input.files[0];if(!file)return;
+  if(typeof XLSX==='undefined'){showToast('No se cargó la librería de Excel. Revisa tu conexión y recarga.');return;}
   const reader=new FileReader();
   reader.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'binary'});parseVigs(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''}));}catch(err){showToast('Error: '+err.message);}};
   reader.readAsBinaryString(file);
@@ -651,122 +1020,41 @@ function handleFile(input){
 function parseVigs(rows){
   if(!rows.length){showToast('Archivo vacío');return;}
   const keys=Object.keys(rows[0]);
-  function fk(cs){
-    for(const c of cs){
-      const cleanC = c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
-      const f=keys.find(k=>{
-        const cleanK = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
-        return cleanK.includes(cleanC);
-      });
-      if(f)return f;
-    }
-    return null;
-  }
-  const kId=fk(['num','empleado','id','no','clave']);
-  const kN=fk(['nombre','name']);
-  const kP=fk(['puesto','cargo']);
-  const kA=fk(['albergue','alberg','lugar']);
-  const kT=fk(['turno']);
-  const kD=fk(['descanso','desc','dia libre','libre']);
-
-  const missing = [];
-  if(!kId) missing.push('N° empleado');
-  if(!kN) missing.push('Nombre');
-  if(!kA) missing.push('Albergue');
-  if(!kT) missing.push('Turno');
-  if(!kD) missing.push('Día descanso');
-
-  if(missing.length > 0){
-    showToast('Columnas faltantes: ' + missing.join(', '));
-    return;
-  }
-
-  vigs=rows.map((r,i)=>({id:normId(r[kId])||String(i+1),nombre:(r[kN]||'').toString().trim(),puesto:r[kP]?(r[kP]).toString().trim():'',albergue:normAlb(r[kA]),turno:(r[kT]||'').toString().trim().toUpperCase(),diaDescanso:normDay(r[kD]||'')})).filter(v=>v.nombre&&v.turno);
+  function fk(cs){for(const c of cs){const f=keys.find(k=>k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').includes(c));if(f)return f;}return null;}
+  const kId=fk(['num','empleado','id','no','clave']),kN=fk(['nombre','name']),kP=fk(['puesto','cargo']),kA=fk(['albergue','alberg','lugar']),kT=fk(['turno']),kD=fk(['descanso','desc','dia libre','libre']);
+  if(!kN||!kA||!kT){showToast('Columnas no encontradas');return;}
+  vigs=rows.map((r,i)=>({id:r[kId]||(i+1),nombre:(r[kN]||'').toString().trim(),puesto:r[kP]?(r[kP]).toString().trim():'',albergue:normAlb(r[kA]),turno:(r[kT]||'').toString().trim().toUpperCase(),diaDescanso:normDay(r[kD]||'')})).filter(v=>v.nombre&&v.turno);
+  rotAnchor=dk(new Date());
   saveVigs();
+  // Un Excel nuevo (p. ej. la rotación mensual de los B) puede introducir choques
+  setTimeout(()=>{
+    const c=listarConflictos(addDays(new Date(),-1),16);
+    if(c.length)showToast(`⚠ ${c.length} conflicto(s) TN→TM detectado(s)`);
+  },600);
   showToast(`✓ ${vigs.length} vigilantes cargados`);showDash();
 }
 function handleVacFile(input){
   const file=input.files[0];if(!file)return;
+  if(typeof XLSX==='undefined'){showToast('No se cargó la librería de Excel. Revisa tu conexión y recarga.');return;}
   const reader=new FileReader();
   reader.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'binary'});parseVac(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''}));}catch(err){showToast('Error: '+err.message);}};
   reader.readAsBinaryString(file);
 }
 function parseVac(rows){
-  if(!rows.length){showToast('Archivo de vacaciones vacío');return;}
   const keys=Object.keys(rows[0]||{});
-  function fk(cs){
-    for(const c of cs){
-      const cleanC = c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
-      const f=keys.find(k=>{
-        const cleanK = k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'');
-        return cleanK.includes(cleanC);
-      });
-      if(f)return f;
-    }
-    return null;
-  }
+  function fk(cs){for(const c of cs){const f=keys.find(k=>k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').includes(c));if(f)return f;}return null;}
   const kId=fk(['clave','num','empleado','id']);
-  const kFi=fk(['fecha inicial', 'inicial']);
-  const kFf=fk(['ingreso a laborar', 'regreso', 'final', 'fin']);
-  const kFi2=fk(['segundo periodo', 'inicial2']);
-  const kFf2=fk(['fin delsegundo', 'final2', 'regreso2']);
-
-  const missing = [];
-  if(!kId) missing.push('Clave de empleado');
-  if(!kFi) missing.push('Fecha inicial');
-  if(!kFf) missing.push('Fecha de regreso (Ingreso a laborar)');
-
-  if(missing.length > 0){
-    showToast('Columnas de vacaciones faltantes: ' + missing.join(', '));
-    return;
-  }
-
   vacaciones=rows.filter(r=>r[kId]).map(r=>{
-    const d0=parseExcelDate(r[kFi]);
-    const d1=parseExcelDate(r[kFf]);
-    const d2=kFi2?parseExcelDate(r[kFi2]):null;
-    const d3=kFf2?parseExcelDate(r[kFf2]):null;
-    return{
-      empId:normId(r[kId]),
-      fi:d0?dk(d0):null,
-      ff:d1?dk(d1):null,
-      fi2:d2?dk(d2):null,
-      ff2:d3?dk(d3):null
-    };
+    const vals=Object.values(r).filter(v=>typeof v==='number'&&v>44000&&v<49000);
+    const d0=excelDate(vals[0]),d1=excelDate(vals[1]),d2=excelDate(vals[2]||null),d3=excelDate(vals[3]||null);
+    return{empId:r[kId],fi:d0?dk(d0):null,ff:d1?dk(d1):null,fi2:d2?dk(d2):null,ff2:d3?dk(d3):null};
   }).filter(v=>v.fi&&v.ff);
-
   saveVacaciones();
-  showToast(`✓ ${vacaciones.length} registros de vacaciones cargados`);render();
+  showToast(`✓ ${vacaciones.length} registros de vacaciones`);render();
 }
 
 // ══════ DATE ══════
-function updDate(){
-  document.getElementById('datedisp').textContent=selDate.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
-  const year = selDate.getFullYear();
-  const month = String(selDate.getMonth() + 1).padStart(2, '0');
-  const day = String(selDate.getDate()).padStart(2, '0');
-  const dp = document.getElementById('datepicker');
-  if (dp) {
-    dp.value = `${year}-${month}-${day}`;
-  }
-}
-function openDatePicker() {
-  const dp = document.getElementById('datepicker');
-  if (dp) {
-    if (typeof dp.showPicker === 'function') {
-      dp.showPicker();
-    } else {
-      dp.click();
-    }
-  }
-}
-function selectDate(val) {
-  if (!val) return;
-  const parts = val.split('-'); // YYYY-MM-DD
-  selDate = new Date(parts[0], parts[1] - 1, parts[2]);
-  selDate.setHours(0,0,0,0);
-  render();
-}
+function updDate(){document.getElementById('datedisp').textContent=selDate.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short',year:'numeric'});}
 function changeDay(n){selDate=new Date(selDate);selDate.setDate(selDate.getDate()+n);render();}
 function goToday(){selDate=new Date();selDate.setHours(0,0,0,0);render();}
 function changeComWeek(n){comWeekOffset+=n;renderComView();}
@@ -787,10 +1075,20 @@ function setView(v){
 function showDash(){
   document.getElementById('scr-upload').style.display='none';
   document.getElementById('scr-dash').style.display='';
-  ['btn-exp','btn-vigs','btn-vac','btn-del'].forEach(id=>document.getElementById(id).style.display='flex');
+  ['btn-exp','btn-sug','btn-vigs','btn-vac','btn-hist','btn-del'].forEach(id=>document.getElementById(id).style.display='flex');
   render();
 }
-function render(){updDate();renderSum();renderFilters();
+function renderConflictos(){
+  const bar=document.getElementById('conflict-bar');if(!bar)return;
+  // Barre la semana visible: los bloqueos previenen altas nuevas, pero no
+  // los choques que ya venían guardados o que llegan con un Excel nuevo.
+  const lista=listarConflictos(getWeekDays(selDate)[0],7);
+  if(!lista.length){bar.innerHTML='';return;}
+  bar.innerHTML=`<div class="cfl-box"><div class="cfl-hd">⚠ ${lista.length} conflicto${lista.length>1?'s':''} TN→TM en esta semana</div>
+    <div class="cfl-list">${lista.map(c=>`<span class="cfl-item" onclick="irAFecha('${c.d2}')">${sn(c.v.nombre)} · TN ${c.d1} → TM ${c.d2}</span>`).join('')}</div></div>`;
+}
+function irAFecha(s){selDate=new Date(s+'T00:00:00');selDate.setHours(0,0,0,0);setView('dia');render();}
+function render(){updDate();renderSum();renderFilters();renderConflictos();
   if(currentView==='dia')renderGrid();
   else if(currentView==='semana')renderWeek();
   else renderComView();
@@ -798,21 +1096,36 @@ function render(){updDate();renderSum();renderFilters();
 function setAlb(a){filterAlb=a;render();}
 
 function renderSum(){
-  let total=vigs.length,trab=0,desc=0,vac=0,inc=0,fal=0,per=0;
+  // Every vigilante lands in exactly one bucket, so the bar always adds up to Total.
+  const porTurno={TM:0,TT:0,TN:0};
+  let desc=0,vac=0,inc=0,fal=0,per=0,sinAsig=0,te=0;
   vigs.forEach(v=>{
     const st=getStatus(v);
     if(st==='vac'){vac++;return;}if(st==='inc'){inc++;return;}
     if(st==='fal'){fal++;return;}if(st==='per'){per++;return;}
-    if(isDescanso(v,selDate)){desc++;return;}trab++;
+    const a=getAsignForVig(v.id,selDate);
+    if(a){if(a.turno==='TE')te++;else if(porTurno[a.turno]!==undefined)porTurno[a.turno]++;return;}
+    if(isDescanso(v,selDate)){desc++;return;}
+    if(isTV(v)){sinAsig++;return;}           // comodín/JT libre pendiente de asignar
+    const tk=getTK(v,selDate);
+    if(porTurno[tk]!==undefined)porTurno[tk]++;
   });
+  const trab=porTurno.TM+porTurno.TT+porTurno.TN+te;
   const items=[
-    {v:total,l:'Total',cls:'stotal'},{v:trab,l:'Trabajando',dot:'#374151'},
+    {v:vigs.length,l:'Total',cls:'stotal'},
+    {v:trab,l:'Trabajando',dot:'#374151',always:1},
+    {v:porTurno.TM,l:'TM · Mañana',dot:TINFO.TM.bg,always:1},
+    {v:porTurno.TT,l:'TT · Tarde', dot:TINFO.TT.bg,always:1},
+    {v:porTurno.TN,l:'TN · Noche', dot:TINFO.TN.bg,always:1},
+    {v:te,l:'TE · Especial',dot:TINFO.TE.bg},
+    {v:sinAsig,l:'Sin asignar',dot:TINFO.TV.bg},
     {v:desc,l:'Descanso',dot:'#9CA3AF'},{v:vac,l:'Vacaciones',dot:'#0C4A6E'},
     {v:inc,l:'Incapacidad',dot:'#991B1B'},{v:fal,l:'Faltas',dot:'#7C2D12'},
     {v:per,l:'Permisos',dot:'#065F46'},
-  ].filter(i=>i.v>0||i.l==='Total'||i.l==='Trabajando');
+  ].filter(i=>i.v>0||i.always||i.l==='Total');
   document.getElementById('sumbar').innerHTML=items.map(i=>`<div class="scard ${i.cls||''}">${i.dot?`<div class="sdot" style="background:${i.dot}"></div>`:''}<div><div class="sval">${i.v}</div><div class="slbl">${i.l}</div></div></div>`).join('');
-  document.getElementById('hdr-sub').textContent=`${total} vigilantes · ${ALBS.length} albergues`;
+  const rotInfo=rotAnchor?` · rotación desde ${rotAnchor}`:'';
+  document.getElementById('hdr-sub').textContent=`${vigs.length} vigilantes · ${ALBS.length} albergues${rotInfo}`;
 }
 
 function renderFilters(){
@@ -833,30 +1146,37 @@ function buildAlbCard(alb){
     const st=getStatus(v);
     if(st==='vac'){vacL.push(v);return;}if(st==='inc'){incL.push(v);return;}
     if(st==='fal'){falL.push(v);return;}if(st==='per'){perL.push(v);return;}
-    if(isDescanso(v,selDate)){descL.push(v);return;}
+    // Someone on their rest day who was called in to cover is working, not absent
+    if(isDescanso(v,selDate)&&!getAsignForVig(v.id,selDate)){descL.push(v);return;}
   });
-  const turnos=alb.tipo==='8h'?['TM','TT','TN']:['TD','TN12'];
+  const turnos=['TM','TT','TN'];
   const secs=turnos.map(tk=>{
-    const info=TINFO[tk],tAPI=tk==='TN12'?'TN':tk;
+    const info=TINFO[tk];
     const {own,assigned}=getSlotWorkers(alb.id,tk,selDate);
     const allW=[...own,...assigned];
     const total=allW.length,cc=covCls(total,alb.min);
+    const nTE=allW.filter(v=>esTE(v,selDate)).length;
     const activo=isActivoAhora(tk);
     const chips=allW.map(v=>{
       const rol=getRol(v),isOwnAlb=v.albergue===alb.id;
       const badge=rol==='jt'?'<span class="rbadge jt">JT</span>':rol==='vc'?'<span class="rbadge vc">VC</span>':'';
       const apoyo=!isOwnAlb?`<span class="apoyo-tag">${ALBS.find(a=>a.id===v.albergue)?.name||''}</span>`:'';
-      return`<span class="vchip ${info.cls}" onclick="openStatus(${v.id})">${sn(v.nombre)}${badge}${apoyo}</span>`;
+      const cubre=isDescanso(v,selDate)?'<span class="desc-tag" title="Cubriendo en su día de descanso">DESC</span>':'';
+      const teTag=esTE(v,selDate)?'<span class="te-tag" title="Turno Especial 08:00–17:00">TE</span>':'';
+      const rot=isRotado(v,selDate)?`<span class="rot-tag" title="Rotó de ${baseTK(v)} a ${getTK(v,selDate)}">↻</span>`:'';
+      return`<span class="vchip ${esTE(v,selDate)?'te':info.cls}" onclick="openStatus(${v.id})">${sn(v.nombre)}${badge}${rot}${teTag}${cubre}${apoyo}</span>`;
     }).join('');
     const asignSec=`<div class="asign-sec">
-      ${total<alb.min?`<div class="asign-warn">⚠ ${alb.min-total} vacante${alb.min-total>1?'s':''} sin cubrir</div>`:`<div style="font-size:10px;color:var(--t3)">Cobertura ${total}/${alb.min}</div>`}
-      <button class="asign-btn ${total<alb.min?'warning':''}" onclick="openAsign('${alb.id}','${tAPI}')">+ Asignar</button>
+      ${total<alb.min?`<div class="asign-warn">⚠ ${alb.min-total} vacante${alb.min-total>1?'s':''} sin cubrir</div>`
+        :nTE?`<div class="te-note">Cobertura ${total}/${alb.min} · ${TE_HUECO[tk]} con ${nTE} menos</div>`
+        :`<div style="font-size:10px;color:var(--t3)">Cobertura ${total}/${alb.min}</div>`}
+      <button class="asign-btn ${total<alb.min?'warning':''}" onclick="openAsign('${alb.id}','${tk}')">+ Asignar</button>
     </div>`;
-    return`<div class="tsec"><div class="tsec-hdr ${info.hdr}"><div style="display:flex;align-items:center;gap:7px"><span class="tname">T${tAPI} · ${info.label}</span>${info.hours?`<span class="thours">${info.hours}</span>`:''} ${activo?'<span class="active-now"><span class="adot"></span>Activo</span>':''}</div><span class="cov ${cc}">${total}/${alb.min}</span></div><div class="vrow">${chips||'<span style="font-size:10px;color:var(--t4)">Sin personal</span>'}</div>${asignSec}</div>`;
+    return`<div class="tsec"><div class="tsec-hdr ${info.hdr}"><div style="display:flex;align-items:center;gap:7px"><span class="tname">${tk} · ${info.label}</span>${info.hours?`<span class="thours">${info.hours}</span>`:''} ${activo?'<span class="active-now"><span class="adot"></span>Activo</span>':''}</div><span class="cov ${cc}">${total}/${alb.min}${nTE?` · +${nTE} TE`:''}</span></div><div class="vrow">${chips||'<span style="font-size:10px;color:var(--t4)">Sin personal</span>'}</div>${asignSec}</div>`;
   }).join('');
   const mkA=(list,cls,ico)=>list.map(v=>`<span class="achip ${cls}" onclick="openStatus(${v.id})">${ico} ${sn(v.nombre)}</span>`).join('');
   const absSec=(descL.length||vacL.length||incL.length||falL.length||perL.length)?`<div class="absent-sec"><div class="absent-title">Ausencias</div><div class="absent-chips">${mkA(descL,'desc','😴')}${mkA(vacL,'vac','🏖')}${mkA(incL,'inc','🤒')}${mkA(falL,'fal','✗')}${mkA(perL,'per','📋')}</div></div>`:'';
-  const activos=vigs.filter(v=>{if(v.albergue!==alb.id)return false;const st=getStatus(v);if(st||isDescanso(v,selDate))return false;if(isVC(v)&&!getAsignForVig(v.id,selDate))return false;return true;}).length+getAsignedToSlot(alb.id,'TM',selDate).length+getAsignedToSlot(alb.id,'TT',selDate).length+getAsignedToSlot(alb.id,'TN',selDate).length+getAsignedToSlot(alb.id,'TD',selDate).length;
+  const activos=['TM','TT','TN'].reduce((n,tk)=>{const{own,assigned}=getSlotWorkers(alb.id,tk,selDate);return n+own.length+assigned.length;},0);
   return`<div class="albcard"><div class="albhead"><div class="albname">${alb.name}</div><div class="albstats">
     <span class="astat" style="background:var(--td-l);color:var(--td-t)">▸ ${activos}</span>
     ${descL.length?`<span class="astat" style="background:var(--s3);color:var(--t2)">😴 ${descL.length}</span>`:''}
@@ -882,10 +1202,10 @@ function renderWeek(){
   const albs=filterAlb==='todos'?ALBS:ALBS.filter(a=>a.id===filterAlb);
   const hdrs=days.map(d=>`<th class="${dk(d)===todayK?'today-h':''}">${d.toLocaleDateString('es-MX',{weekday:'narrow',day:'numeric'})}</th>`).join('');
   const rows=albs.map(alb=>{
-    const turnos=alb.tipo==='8h'?['TM','TT','TN']:['TD','TN12'];
+    const turnos=['TM','TT','TN'];
     return`<tr class="walb"><td colspan="8">${alb.name}</td></tr>`+
     turnos.map(tk=>{
-      const info=TINFO[tk],tAPI=tk==='TN12'?'TN':tk;
+      const info=TINFO[tk];
       const cells=days.map(d=>{
         const{own,assigned}=getSlotWorkers(alb.id,tk,d);
         const all=[...own,...assigned],total=all.length,cc=covCls(total,alb.min);
@@ -895,7 +1215,7 @@ function renderWeek(){
           <span class="wcov ${cc}">${total}/${alb.min}</span>
         </td>`;
       }).join('');
-      return`<tr><td style="padding:6px 9px;white-space:nowrap"><span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;color:#fff;background:${info.bg}">T${tAPI}</span> <span style="font-size:10px;color:var(--t2)">${info.label}</span></td>${cells}</tr>`;
+      return`<tr><td style="padding:6px 9px;white-space:nowrap"><span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;color:#fff;background:${info.bg}">${tk}</span> <span style="font-size:10px;color:var(--t2)">${info.label}</span></td>${cells}</tr>`;
     }).join('');
   }).join('');
   document.getElementById('wtable').innerHTML=`<thead><tr><th class="rhdr">Albergue / Turno</th>${hdrs}</tr></thead><tbody>${rows}</tbody>`;
@@ -911,7 +1231,7 @@ function renderComView(){
   document.getElementById('com-week-label').textContent=
     `${days[0].toLocaleDateString('es-MX',{day:'numeric',month:'short'})} – ${days[6].toLocaleDateString('es-MX',{day:'numeric',month:'short'})}`;
 
-  const allVC=vigs.filter(v=>isVC(v));
+  const allVC=vigs.filter(v=>isVC(v)||isTV(v));
   // Status bar
   let totalSlots=allVC.length*7,assigned=0,unassigned=0;
   allVC.forEach(v=>{
@@ -931,41 +1251,37 @@ function renderComView(){
     const cells=days.map(d=>{
       const isToday=dk(d)===todayK;
       const st=getStatus(v,d);
-      if(st==='vac')return`<td class="${isToday?'com-today':''}"><div class="com-unavail" style="cursor:pointer;" onclick="openStatus(${v.id},'${dk(d)}')">🏖 Vac.</div></td>`;
-      if(st==='inc')return`<td class="${isToday?'com-today':''}"><div class="com-unavail" style="cursor:pointer;" onclick="openStatus(${v.id},'${dk(d)}')">🤒 Inc.</div></td>`;
-      if(st==='fal')return`<td class="${isToday?'com-today':''}"><div class="com-unavail" style="cursor:pointer;" onclick="openStatus(${v.id},'${dk(d)}')">✗ Falta</div></td>`;
-      if(st==='per')return`<td class="${isToday?'com-today':''}"><div class="com-unavail" style="cursor:pointer;" onclick="openStatus(${v.id},'${dk(d)}')">📋 Perm.</div></td>`;
-      if(isDescanso(v,d))return`<td class="${isToday?'com-today':''}"><div class="com-unavail">😴 Desc.</div></td>`;
+      if(st==='vac')return`<td class="${isToday?'com-today':''}"><div class="com-unavail">🏖 Vac.</div></td>`;
+      if(st==='inc')return`<td class="${isToday?'com-today':''}"><div class="com-unavail">🤒 Inc.</div></td>`;
+      if(st==='fal')return`<td class="${isToday?'com-today':''}"><div class="com-unavail">✗ Falta</div></td>`;
+      if(st==='per')return`<td class="${isToday?'com-today':''}"><div class="com-unavail">📋 Perm.</div></td>`;
       const asign=getAsignForVig(v.id,d);
+      if(isDescanso(v,d)&&!asign)return`<td class="${isToday?'com-today':''}"><div class="com-rest" onclick="openComCell(${v.id},'${dk(d)}')">😴 Desc.<span style="font-size:7px;opacity:.75">asignar</span></div></td>`;
       if(asign){
         const albName=ALBS.find(a=>a.id===asign.albId)?.name||asign.albId;
-        return`<td class="${isToday?'com-today':''}"><div class="com-assigned" onclick="openComCell(${v.id},'${dk(d)}')"><span style="font-weight:700">${asign.turno}</span><span class="com-assigned-alb">${albName}</span></div></td>`;
+        const lbl=asign.turno==='TE'?`TE→${asign.cubre||'?'}`:asign.turno;
+        return`<td class="${isToday?'com-today':''}"><div class="com-assigned ${asign.turno==='TE'?'is-te':''}" onclick="openComCell(${v.id},'${dk(d)}')"><span style="font-weight:700">${lbl}</span><span class="com-assigned-alb">${albName}</span></div></td>`;
       }
       return`<td class="${isToday?'com-today':''}"><div class="com-empty" onclick="openComCell(${v.id},'${dk(d)}')">⚠ Sin asignar</div></td>`;
     }).join('');
-    return`<tr><td class="com-name-cell" style="cursor:pointer;" onclick="openStatus(${v.id})">${sn(v.nombre)}<br><span style="font-size:9px;color:var(--vc);font-family:var(--mono)">${v.albergue}</span></td>${cells}</tr>`;
+    return`<tr><td class="com-name-cell">${sn(v.nombre)}<br><span style="font-size:9px;color:var(--vc);font-family:var(--mono)">${v.albergue}</span></td>${cells}</tr>`;
   }).join('');
   document.getElementById('com-table').innerHTML=`<thead><tr><th class="name-h">Comodín</th>${hdrs}</tr></thead><tbody>${rows||'<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--t3)">Sin comodines en el Excel</td></tr>'}</tbody>`;
 }
 
 // ══════ STATUS MODAL ══════
-function openStatus(vigId, dateObj){
+function openStatus(vigId){
   const v=vigs.find(x=>String(x.id)===String(vigId));if(!v)return;
-  modalVigId=vigId;
-  modalStatusDate = dateObj ? new Date(dateObj + 'T12:00:00') : new Date(selDate);
-  modalStatusDate.setHours(0,0,0,0);
-
-  const cur=getNov(vigId, modalStatusDate);
-  modalSt=cur;
+  modalVigId=vigId;const cur=getNov(vigId,selDate);modalSt=cur;
   document.getElementById('ms-name').textContent=v.nombre;
-  document.getElementById('ms-meta').textContent=`${getRol(v).toUpperCase()} · ${ALBS.find(a=>a.id===v.albergue)?.name||v.albergue} · ${dk(modalStatusDate)}`;
+  const rotTxt=isRotado(v,selDate)?` · ↻ ${baseTK(v)}→${getTK(v,selDate)}`:'';
+  document.getElementById('ms-meta').textContent=`${getRol(v).toUpperCase()} · ${ALBS.find(a=>a.id===v.albergue)?.name||v.albergue} · ${getTK(v,selDate)}${rotTxt} · ${dk(selDate)}`;
   document.querySelectorAll('.sopt').forEach(el=>el.classList.toggle('on',el.dataset.s===cur));
   openMod('m-status');
 }
 function selSt(s){modalSt=s;document.querySelectorAll('.sopt').forEach(el=>el.classList.toggle('on',el.dataset.s===s));}
 function saveStatus(){
-  const dateToUse = modalStatusDate || selDate;
-  const k=`${modalVigId}_${dk(dateToUse)}`;
+  const k=`${modalVigId}_${dk(selDate)}`;
   if(modalSt)novedades[k]=modalSt;else delete novedades[k];
   saveNovedad(k, modalSt||null);
   closeMod('m-status');render();showToast('✓ Estado actualizado');
@@ -973,14 +1289,23 @@ function saveStatus(){
 
 // ══════ ASSIGN MODAL (turno slot) ══════
 function openAsign(albId,turno){
-  maAlb=albId;maTurno=turno;maSel=null;maRolF='todos';maAlbF='todos';
-  const tKey=turno==='TN'&&ALBS.find(a=>a.id===albId)?.tipo==='12h'?'TN12':turno;
-  document.getElementById('ma-sub').textContent=`Turno ${turno} · ${ALBS.find(a=>a.id===albId)?.name||albId}`;
+  maAlb=albId;maTurno=turno;maSel=null;maRolF='todos';maAlbF='todos';maTE=false;
+  document.getElementById('ma-sub').textContent=`${turno} · ${TINFO[turno]?.label||''} · ${ALBS.find(a=>a.id===albId)?.name||albId}`;
   document.getElementById('ma-search').value='';
   // Check if any vigs assigned to this slot
   const curAsigned=getAsignedToSlot(albId,turno,selDate);
   document.getElementById('ma-remove').style.display=curAsigned.length?'':'none';
-  renderAsignFilters();renderAsignList();openMod('m-asign');
+  renderTeToggle();renderAsignFilters();renderAsignList();openMod('m-asign');
+}
+function renderTeToggle(){
+  document.getElementById('ma-te').innerHTML=
+   `<button class="te-opt ${!maTE?'on':''}" onclick="setMaTE(false)">Turno normal<br><span>${TINFO[maTurno]?.hours||''}</span></button>
+    <button class="te-opt ${maTE?'on':''}" onclick="setMaTE(true)">Turno especial<br><span>08:00–17:00</span></button>`;
+}
+function setMaTE(v){
+  maTE=v;maSel=null;
+  // Cambia el horario, así que el bloqueo TN→ se recalcula
+  renderTeToggle();renderAsignList();
 }
 function renderAsignFilters(){
   document.getElementById('ma-roles').innerHTML=['todos','jt','vc','vb'].map(r=>`<button class="mfbtn ${maRolF===r?'on':''}" onclick="maRolF='${r}';renderAsignFilters();renderAsignList()">${r==='todos'?'Todos':r.toUpperCase()}</button>`).join('');
@@ -1002,29 +1327,28 @@ function renderAsignList(){
     const sameAlb=v.albergue===maAlb;
     const albName=ALBS.find(a=>a.id===v.albergue)?.name||v.albergue;
     const rol=getRol(v);
-    return`<div class="mopt ${isSel?'sel':''} ${occ&&!isCur?'unavail':''}" onclick="selAsign(${v.id},this)">
-      <div><div class="mo-name">${sn(v.nombre)} ${isCur?'<span style="font-size:9px;color:var(--vc);font-weight:800">ASIGNADO</span>':''} ${occ&&!isCur?'<span style="font-size:9px;color:var(--fal);font-weight:700">NO DISP.</span>':''}</div>
-      <div class="mo-meta">${albName} · ${rol.toUpperCase()} · T${getTK(v)}</div></div>
+    const enDesc=isDescanso(v,selDate)&&!isCur;
+    const cf=isCur?null:conflictoTNTM(v,maTE?'TE':maTurno,selDate);
+    const bloq=(occ||cf)&&!isCur;
+    return`<div class="mopt ${isSel?'sel':''} ${bloq?'unavail':''}" onclick="selAsign(${v.id},this)">
+      <div><div class="mo-name">${sn(v.nombre)} ${isCur?'<span style="font-size:9px;color:var(--vc);font-weight:800">ASIGNADO</span>':''} ${enDesc?'<span class="desc-tag">DESCANSO</span>':''} ${cf?'<span class="blk-tag">✕ TN→TM</span>':occ&&!isCur?'<span style="font-size:9px;color:var(--fal);font-weight:700">NO DISP.</span>':''}</div>
+      <div class="mo-meta">${cf?`<span style="color:var(--al);font-weight:700">${cf}</span>`:`${albName} · ${rol.toUpperCase()} · ${getTK(v,selDate)}`}</div></div>
       <span class="mo-tag ${sameAlb?'mo-same':'mo-other'}">${sameAlb?'Mismo':'Apoyo'}</span>
     </div>`;
   }).join(''):'<div style="font-size:11px;color:var(--t3);padding:12px;text-align:center">Sin vigilantes</div>';
 }
-function selAsign(id,el){
-  const v=vigs.find(x=>String(x.id)===String(id));
-  if(v && getStatus(v,selDate)){
-    closeMod('m-asign');
-    openStatus(id);
-    return;
-  }
-  maSel=id;document.querySelectorAll('#ma-list .mopt').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');
-}
+function selAsign(id,el){maSel=id;document.querySelectorAll('#ma-list .mopt').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');}
 function saveAsign(){
   if(!maSel){closeMod('m-asign');return;}
+  const vSel=vigs.find(x=>String(x.id)===String(maSel));
+  const cf=vSel&&conflictoTNTM(vSel,maTE?'TE':maTurno,selDate);
+  if(cf){showToast(`✕ No permitido · ${sn(vSel.nombre)} — ${cf}`);return;}
   // Save asignacion for this vig on selDate
   const askKey=getAsignKey(maSel,selDate);
-  asignaciones[askKey]={albId:maAlb,turno:maTurno};
-  saveAsignacion(askKey,{albId:maAlb,turno:maTurno});
-  closeMod('m-asign');render();showToast('✓ Asignado');
+  const payload=maTE?{albId:maAlb,turno:'TE',cubre:maTurno}:{albId:maAlb,turno:maTurno};
+  asignaciones[askKey]=payload;
+  saveAsignacion(askKey,payload);
+  closeMod('m-asign');render();showToast(maTE?`✓ Asignado en TE · cubre ${maTurno}`:'✓ Asignado');
 }
 function removeAsign(){
   // Remove all asignaciones to this slot on selDate
@@ -1040,25 +1364,47 @@ function openComCell(vigId,dateStr){
   document.getElementById('mcc-title').textContent=v?sn(v.nombre):'Comodín';
   document.getElementById('mcc-sub').textContent=dateStr;
   const existingAsign=getAsignForVig(vigId,mccDate);
-  if(existingAsign){mccTurnoSel=existingAsign.turno;mccAlbSel=existingAsign.albId;}
+  mccCubre=null;
+  if(existingAsign){mccTurnoSel=existingAsign.turno;mccAlbSel=existingAsign.albId;mccCubre=existingAsign.cubre||null;}
   document.getElementById('mcc-remove').style.display=existingAsign?'':'none';
-  // Turnos
-  const albForVC=vigs.find(x=>String(x.id)===String(vigId))?.albergue;
-  const albCfg=ALBS.find(a=>a.id===albForVC);
-  // Show relevant turnos (based on VC's own alb type, but can assign to any)
-  const turnos=['TM','TT','TN','TD','TN12'];
-  document.getElementById('mcc-turnos').innerHTML=turnos.map(t=>`<button class="ts-btn ${mccTurnoSel===t?'on':''}" onclick="selMccTurno('${t}')">${t==='TN12'?'TN 12h':t}</button>`).join('');
+  const turnos=['TM','TT','TN','TE'];
+  const vCom=vigs.find(x=>String(x.id)===String(vigId));
+  document.getElementById('mcc-turnos').innerHTML=turnos.map(t=>{
+    const cf=vCom?conflictoTNTM(vCom,t,mccDate):null;
+    if(cf&&mccTurnoSel===t)mccTurnoSel=null;   // no dejar preseleccionado algo prohibido
+    return`<button class="ts-btn ${mccTurnoSel===t?'on':''} ${cf?'dis':''}" data-t="${t}" ${cf?`title="No permitido · ${cf}" disabled`:`onclick="selMccTurno('${t}')"`}>${t}<br><span style="font-size:8px;opacity:.7">${cf?'✕ TN→TM':TINFO[t].label}</span></button>`;
+  }).join('');
   document.getElementById('mcc-albs').innerHTML=ALBS.map(a=>`<button class="as-btn ${mccAlbSel===a.id?'on':''}" onclick="selMccAlb('${a.id}')">${a.name}</button>`).join('');
+  renderMccCubre();
   openMod('m-com-cell');
 }
-function selMccTurno(t){mccTurnoSel=t;document.querySelectorAll('.ts-btn').forEach(b=>b.classList.toggle('on',b.textContent===(t==='TN12'?'TN 12h':t)));}
+function selMccTurno(t){
+  mccTurnoSel=t;
+  if(t!=='TE')mccCubre=null;
+  document.querySelectorAll('.ts-btn').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  renderMccCubre();
+}
+// El TE debe declarar a qué turno viene a cubrir
+function renderMccCubre(){
+  const w=document.getElementById('mcc-cubre-wrap');if(!w)return;
+  if(mccTurnoSel!=='TE'){w.style.display='none';w.innerHTML='';return;}
+  w.style.display='';
+  w.innerHTML=`<span class="mlabel">¿Qué turno cubre?</span>
+    <div class="turno-sel">${['TM','TT'].map(t=>`<button class="ts-btn ${mccCubre===t?'on':''}" data-c="${t}" onclick="selMccCubre('${t}')">${t}<br><span style="font-size:8px;opacity:.7">${TINFO[t].label}</span></button>`).join('')}</div>
+    ${mccCubre?`<div class="te-note" style="margin-top:2px">${TE_HUECO[mccCubre]} queda con 1 menos</div>`:''}`;
+}
+function selMccCubre(t){mccCubre=t;renderMccCubre();}
 function selMccAlb(a){mccAlbSel=a;document.querySelectorAll('.as-btn').forEach(b=>b.classList.toggle('on',b.onclick.toString().includes(`'${a}'`)));}
 function saveComCell(){
   if(!mccTurnoSel||!mccAlbSel){showToast('Selecciona turno y albergue');return;}
-  const tAPI=mccTurnoSel==='TN12'?'TN':mccTurnoSel;
+  if(mccTurnoSel==='TE'&&!mccCubre){showToast('Indica qué turno cubre el TE');return;}
+  const vCom=vigs.find(x=>String(x.id)===String(mccVigId));
+  const cfc=vCom&&conflictoTNTM(vCom,mccTurnoSel,mccDate);
+  if(cfc){showToast(`✕ No permitido · ${cfc}`);return;}
   const cck=getAsignKey(mccVigId,mccDate);
-  asignaciones[cck]={albId:mccAlbSel,turno:tAPI};
-  saveAsignacion(cck,{albId:mccAlbSel,turno:tAPI});
+  const pay=mccTurnoSel==='TE'?{albId:mccAlbSel,turno:'TE',cubre:mccCubre}:{albId:mccAlbSel,turno:mccTurnoSel};
+  asignaciones[cck]=pay;
+  saveAsignacion(cck,pay);
   closeMod('m-com-cell');render();showToast('✓ Comodín asignado');
 }
 function removeComCell(){
@@ -1069,38 +1415,102 @@ function removeComCell(){
 }
 
 // ══════ DELETE ALL ══════
-function deleteAll(){
-  const novKeys = Object.keys(novedades);
-  const asigKeys = Object.keys(asignaciones);
-
-  const promises = [
-    window._fbSet('config','vigs',{list:[]}),
-    window._fbSet('config','vacaciones',{list:[]})
-  ];
-
-  novKeys.forEach(k => {
-    promises.push(window._fbDel('novedades', k));
-  });
-  asigKeys.forEach(k => {
-    promises.push(window._fbDel('asignaciones', k));
-  });
-
-  vigs=[];vacaciones=[];novedades={};asignaciones={};
-
-  Promise.all(promises).then(() => {
-    render();
-  }).catch(e => console.error(e));
-
+async function deleteAll(){
   closeMod('m-del');
+  showToast('Borrando datos...');
+  vigs=[];vacaciones=[];novedades={};asignaciones={};
+  try{
+    await Promise.all([
+      window._fbSet('config','vigs',{list:[],rotAnchor:null,rotOn:true}),
+      window._fbSet('config','vacaciones',{list:[]}),
+      window._fbWipe('novedades'),
+      window._fbWipe('asignaciones'),
+    ]);
+  }catch(e){showToast('Error al borrar: '+e.message);return;}
   document.getElementById('scr-dash').style.display='none';
   document.getElementById('scr-upload').style.display='';
-  ['btn-exp','btn-vigs','btn-vac','btn-del'].forEach(id=>document.getElementById(id).style.display='none');
-  showToast('Datos eliminados');
+  ['btn-exp','btn-sug','btn-vigs','btn-vac','btn-hist','btn-del'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+  showToast('Todos los datos fueron eliminados');
+}
+
+// Clear only the movement history, keeping the roster and vacation records
+async function borrarHistorial(){
+  closeMod('m-hist');
+  showToast('Borrando historial...');
+  try{
+    const n=await window._fbWipe('novedades');
+    const a=await window._fbWipe('asignaciones');
+    novedades={};asignaciones={};render();
+    showToast(`Historial borrado · ${n} novedades, ${a} asignaciones`);
+  }catch(e){showToast('Error: '+e.message);}
+}
+
+// ══════ SUGERENCIA DE COBERTURA ══════
+// Prioridad: 1) comodín libre  2) excedente de otro albergue  3) tolerar min-1
+//            4) día de descanso, solo si se caería por debajo del piso.
+let sugPlan=[],sugTolera=[],sugCarga={};
+
+function _cuenta(alb,tk,d){const w=getSlotWorkers(alb.id,tk,d);return w.own.length+w.assigned.length;}
+function _libre(v,d){return !getStatus(v,d)&&!getAsignForVig(v.id,d);}
+function _kg(c,v){return c[v.id]||0;}
+
+function _comodinesLibres(c,tk,d){
+  return vigs.filter(v=>isTV(v)&&_libre(v,d)&&!isDescanso(v,d)&&!conflictoTNTM(v,tk,d))
+             .sort((x,y)=>_kg(c,x)-_kg(c,y));
+}
+// Personal que hoy cubre su turno en un albergue que va por encima del mínimo
+function _excedentes(c,tk,d,destino){
+  const out=[];
+  ALBS.forEach(a=>{
+    if(a.id===destino.id)return;
+    const n=_cuenta(a,tk,d);
+    if(n<=a.min)return;
+    getSlotWorkers(a.id,tk,d).own.forEach(v=>{
+      if(_libre(v,d)&&!conflictoTNTM(v,tk,d))out.push({v,sobra:n-a.min,de:a.name});
+    });
+  });
+  return out.sort((x,y)=>y.sobra-x.sobra||_kg(c,x.v)-_kg(c,y.v));
+}
+function _enDescanso(c,tk,d){
+  return vigs.filter(v=>isDescanso(v,d)&&_libre(v,d)&&!conflictoTNTM(v,tk,d))
+             .sort((x,y)=>_kg(c,x)-_kg(c,y));
+}
+
+function sugerirCobertura(desdeStr,hastaStr){
+  const backup=JSON.parse(JSON.stringify(asignaciones));
+  const plan=[],tolera=[],carga={};
+  try{
+    const d0=new Date(desdeStr+'T12:00:00'),d1=new Date(hastaStr+'T12:00:00');
+    for(let d=new Date(d0);d<=d1;d.setDate(d.getDate()+1)){
+      const dia=new Date(d);dia.setHours(0,0,0,0);
+      ALBS.forEach(a=>['TM','TT','TN'].forEach(tk=>{
+        const piso=Math.max(1,a.min-1);   // 2/3 es aceptable; nunca cero
+        let guard=0;
+        while(_cuenta(a,tk,dia)<a.min&&guard++<8){
+          const n=_cuenta(a,tk,dia);
+          let pick=null,tipo=null,de=null;
+          const c=_comodinesLibres(carga,tk,dia)[0];
+          if(c){pick=c;tipo='comodín';de=ALBS.find(x=>x.id===c.albergue)?.name||'';}
+          if(!pick){const e=_excedentes(carga,tk,dia,a)[0];if(e){pick=e.v;tipo='excedente';de=e.de;}}
+          if(!pick&&n>=piso){tolera.push({f:dk(dia),alb:a.name,tk,n,min:a.min});break;}
+          if(!pick){const r=_enDescanso(carga,tk,dia)[0];
+            if(r){pick=r;tipo='descanso';de=ALBS.find(x=>x.id===r.albergue)?.name||'';}}
+          if(!pick){tolera.push({f:dk(dia),alb:a.name,tk,n,min:a.min,sin:1});break;}
+          asignaciones[getAsignKey(pick.id,dia)]={albId:a.id,turno:tk};
+          carga[pick.id]=_kg(carga,pick)+1;
+          plan.push({f:dk(dia),albId:a.id,alb:a.name,tk,vigId:pick.id,nom:pick.nombre,
+                     tipo,de,rol:getRol(pick).toUpperCase()});
+        }
+      }));
+    }
+  }finally{ asignaciones=backup; }   // nada se guarda hasta que el usuario confirme
+  return{plan,tolera,carga};
 }
 
 // ══════ EXPORT ══════
 function selExpV(v,el){expV=v;document.querySelectorAll('[data-ev]').forEach(x=>x.classList.toggle('on',x.dataset.ev===v));
-  document.getElementById('exp-alb-wrap').style.display=v==='novExcel'?'none':'';}
+  document.getElementById('exp-alb-wrap').style.display=v==='novExcel'?'none':'';
+  document.getElementById('exp-range-wrap').style.display=v==='novExcel'?'':'none';}
 function selExpA(v,el){expA=v;document.querySelectorAll('[data-ea]').forEach(x=>x.classList.toggle('on',x.dataset.ea===v));}
 
 async function doExport(){
@@ -1116,15 +1526,15 @@ async function doExport(){
         <div style="font-size:11px;color:#6B6760;margin-top:3px;font-family:monospace">Turnos · ${dateStr}</div></div>
       </div><div style="display:grid;grid-template-columns:repeat(${albs.length===1?1:2},1fr);gap:12px;">`;
     albs.forEach(alb=>{
-      const turnos=alb.tipo==='8h'?['TM','TT','TN']:['TD','TN12'];
+      const turnos=['TM','TT','TN'];
       html+=`<div style="border:1px solid #e5e1dc;border-radius:10px;overflow:hidden;"><div style="background:#17150F;color:#fff;padding:9px 13px;font-size:13px;font-weight:700">${alb.name}</div>`;
       turnos.forEach(tk=>{
-        const info=TINFO[tk],tAPI=tk==='TN12'?'TN':tk;
+        const info=TINFO[tk];
         const{own,assigned}=getSlotWorkers(alb.id,tk,selDate);
         const allW=[...own,...assigned],total=allW.length;
         const covColor=total>=alb.min?'#065F46':total>=alb.min-1?'#92400E':'#991B1B';
         html+=`<div><div style="background:${info.bg};padding:6px 13px;display:flex;justify-content:space-between;align-items:center">
-          <span style="color:#fff;font-size:10px;font-weight:700">T${tAPI} · ${info.label}${info.hours?' · '+info.hours:''}</span>
+          <span style="color:#fff;font-size:10px;font-weight:700">${tk} · ${info.label}${info.hours?' · '+info.hours:''}</span>
           <span style="background:rgba(255,255,255,.2);color:#fff;font-size:9px;font-weight:700;padding:1px 7px;border-radius:4px">${total}/${alb.min}</span></div>
           <div style="padding:7px 13px;display:flex;flex-wrap:wrap;gap:4px;background:rgba(0,0,0,.02)">`;
         allW.forEach(v=>{const r=getRol(v);html+=`<span style="background:${info.lgt};color:${info.txt};border:1px solid;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600">${sn(v.nombre)}${r==='jt'?' ★':r==='vc'?' ◆':''}</span>`;});
@@ -1142,15 +1552,15 @@ async function doExport(){
         <div><div style="font-size:17px;font-weight:800">🛡 Protección y Seguridad</div>
         <div style="font-size:11px;color:#6B6760;margin-top:2px;font-family:monospace">${wLabel}</div></div></div>`;
     albs.forEach(alb=>{
-      const turnos=alb.tipo==='8h'?['TM','TT','TN']:['TD','TN12'];
+      const turnos=['TM','TT','TN'];
       html+=`<div style="margin-bottom:14px"><div style="background:#17150F;color:#fff;padding:7px 11px;border-radius:7px 7px 0 0;font-size:12px;font-weight:700">${alb.name}</div>
         <table style="width:100%;border-collapse:collapse;border:1px solid #e5e1dc;border-top:none;font-size:9px"><thead><tr>
           <th style="background:#374151;color:#fff;padding:6px 9px;font-size:9px;text-align:left;width:90px">Turno</th>
           ${days.map(d=>`<th style="background:${dk(d)===dk(new Date())?'#1E3A8A':'#374151'};color:#fff;padding:6px 7px;text-align:center">${d.toLocaleDateString('es-MX',{weekday:'narrow',day:'numeric'})}</th>`).join('')}
         </tr></thead><tbody>`;
       turnos.forEach(tk=>{
-        const info=TINFO[tk],tAPI=tk==='TN12'?'TN':tk;
-        html+=`<tr><td style="background:${info.bg};color:#fff;padding:5px 9px;font-weight:700;white-space:nowrap">T${tAPI}<br>${info.label}</td>`;
+        const info=TINFO[tk];
+        html+=`<tr><td style="background:${info.bg};color:#fff;padding:5px 9px;font-weight:700;white-space:nowrap">${tk}<br>${info.label}</td>`;
         days.forEach(d=>{
           const{own,assigned}=getSlotWorkers(alb.id,tk,d);
           const allW=[...own,...assigned],total=allW.length;
@@ -1176,30 +1586,123 @@ async function doExport(){
   target.style.display='none';closeMod('m-export');
 }
 
+const ST_LABEL={inc:'Incapacidad',fal:'Falta',per:'Permiso'};
 function exportNovExcel(){
+  const desde=document.getElementById('exp-desde').value;
+  const hasta=document.getElementById('exp-hasta').value;
   const rows=[];
   Object.entries(novedades).forEach(([key,st])=>{
-    if(st!=='inc'&&st!=='per'&&st!=='fal')return;
-    const[vigId,dateStr]=key.split('_');
+    if(!ST_LABEL[st])return;
+    const i=key.lastIndexOf('_');
+    const vigId=key.slice(0,i),dateStr=key.slice(i+1);
+    if(desde&&dateStr<desde)return;
+    if(hasta&&dateStr>hasta)return;
     const v=vigs.find(x=>String(x.id)===String(vigId));
     if(!v)return;
+    const dd=new Date(dateStr+'T12:00:00');
     rows.push({
+      'Fecha':dateStr,
+      'Día':DIAS[dd.getDay()],
+      'N° empleado':v.id,
       'Nombre':v.nombre,
       'Albergue':ALBS.find(a=>a.id===v.albergue)?.name||v.albergue,
-      'Puesto/Rol':getRol(v).toUpperCase(),
-      'Turno':v.turno,
-      'Fecha':dateStr,
-      'Estado':st==='inc'?'Incapacidad':st==='per'?'Permiso':'Falta',
+      'Rol':getRol(v).toUpperCase(),
+      'Turno':getTK(v,new Date(dateStr+'T12:00:00')),
+      'Novedad':ST_LABEL[st],
     });
   });
-  if(!rows.length){showToast('Sin registros de incapacidades, permisos o faltas');return;}
-  rows.sort((a,b)=>a.Fecha.localeCompare(b.Fecha));
+  if(!rows.length){showToast('Sin registros en ese rango');return;}
+  rows.sort((a,b)=>a.Fecha.localeCompare(b.Fecha)||a.Nombre.localeCompare(b.Nombre));
+  const tally={};
+  rows.forEach(r=>{
+    const k=r['Nombre'];
+    tally[k]=tally[k]||{'Nombre':k,'Albergue':r['Albergue'],'Incapacidad':0,'Falta':0,'Permiso':0,'Total':0};
+    tally[k][r['Novedad']]++;tally[k]['Total']++;
+  });
+  const resumen=Object.values(tally).sort((a,b)=>b.Total-a.Total);
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.json_to_sheet(rows);
-  ws['!cols']=[{wch:24},{wch:14},{wch:12},{wch:8},{wch:12},{wch:14}];
-  XLSX.utils.book_append_sheet(wb,ws,'Incapacidades, Permisos, Faltas');
-  XLSX.writeFile(wb,`novedades_${dk(new Date())}.xlsx`);
-  showToast('✓ Excel de novedades descargado');closeMod('m-export');
+  ws['!cols']=[{wch:12},{wch:11},{wch:12},{wch:28},{wch:14},{wch:7},{wch:8},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws,'Detalle');
+  const ws2=XLSX.utils.json_to_sheet(resumen);
+  ws2['!cols']=[{wch:28},{wch:14},{wch:13},{wch:9},{wch:10},{wch:8}];
+  XLSX.utils.book_append_sheet(wb,ws2,'Resumen');
+  const tag=(desde||hasta)?`${desde||'inicio'}_a_${hasta||'hoy'}`:'historico';
+  XLSX.writeFile(wb,`novedades_${tag}.xlsx`);
+  showToast(`✓ ${rows.length} registros exportados`);closeMod('m-export');
+}
+
+// ══════ UI SUGERENCIA ══════
+function openSug(){
+  const hoy=new Date();hoy.setHours(0,0,0,0);
+  const dom=new Date(hoy);dom.setDate(dom.getDate()+((7-dom.getDay())%7||7)); // próximo domingo
+  document.getElementById('sug-desde').value=dk(hoy);
+  document.getElementById('sug-hasta').value=dk(dom);
+  document.getElementById('sug-out').innerHTML='';
+  document.getElementById('sug-actions').style.display='none';
+  sugPlan=[];sugTolera=[];sugCarga={};
+  openMod('m-sug');
+}
+function calcularSug(){
+  const a=document.getElementById('sug-desde').value,b=document.getElementById('sug-hasta').value;
+  if(!a||!b){showToast('Indica el rango de fechas');return;}
+  if(b<a){showToast('La fecha final va después de la inicial');return;}
+  const r=sugerirCobertura(a,b);
+  sugPlan=r.plan;sugTolera=r.tolera;sugCarga=r.carga;
+  renderSugOut();
+}
+function renderSugOut(){
+  const out=document.getElementById('sug-out');
+  if(!sugPlan.length&&!sugTolera.length){
+    out.innerHTML='<div class="sug-ok">✓ Todos los turnos cumplen el mínimo en ese rango</div>';
+    document.getElementById('sug-actions').style.display='none';return;
+  }
+  const nDesc=sugPlan.filter(p=>p.tipo==='descanso').length;
+  let h=`<div class="sug-sum">
+    <span class="sug-pill">${sugPlan.length} movimiento${sugPlan.length!==1?'s':''}</span>
+    <span class="sug-pill ${nDesc?'warn':'ok'}">${nDesc?`${nDesc} desde descanso`:'0 desde descanso'}</span>
+    ${sugTolera.length?`<span class="sug-pill warn">${sugTolera.length} quedan bajo el mínimo</span>`:''}
+  </div>`;
+  // agrupado por día
+  const byDay={};sugPlan.forEach(p=>{(byDay[p.f]=byDay[p.f]||[]).push(p);});
+  Object.keys(byDay).sort().forEach(f=>{
+    const dd=new Date(f+'T12:00:00');
+    h+=`<div class="sug-day">${DIAS[dd.getDay()]} ${f}</div>`;
+    byDay[f].forEach(p=>{
+      h+=`<div class="sug-row">
+        <span class="sug-slot" style="background:${TINFO[p.tk].bg}">${p.tk}</span>
+        <span class="sug-alb">${p.alb}</span>
+        <span class="sug-nom">${sn(p.nom)}</span>
+        <span class="sug-tipo ${p.tipo==='descanso'?'warn':''}">${p.tipo}${p.de?' · '+p.de:''}</span>
+      </div>`;
+    });
+  });
+  if(sugTolera.length){
+    h+=`<div class="sug-day">Se quedan bajo el mínimo</div>`;
+    sugTolera.forEach(x=>{h+=`<div class="sug-row"><span class="sug-slot" style="background:${TINFO[x.tk].bg}">${x.tk}</span>
+      <span class="sug-alb">${x.alb}</span><span class="sug-nom">${x.f}</span>
+      <span class="sug-tipo ${x.sin?'warn':''}">${x.n}/${x.min}${x.sin?' · sin opción':''}</span></div>`;});
+  }
+  const carga=Object.entries(sugCarga).map(([id,n])=>({v:vigs.find(x=>String(x.id)===id),n}))
+    .filter(x=>x.v).sort((a,b)=>b.n-a.n);
+  if(carga.length){
+    h+=`<div class="sug-day">Reparto de movimientos</div><div class="sug-carga">`;
+    carga.forEach(c=>{h+=`<span class="sug-cchip">${sn(c.v.nombre)} <b>${c.n}</b></span>`;});
+    h+=`</div>`;
+  }
+  out.innerHTML=h;
+  document.getElementById('sug-apply').textContent=`Aplicar ${sugPlan.length}`;
+  document.getElementById('sug-actions').style.display=sugPlan.length?'flex':'none';
+}
+function aplicarSug(){
+  if(!sugPlan.length){closeMod('m-sug');return;}
+  let n=0;
+  sugPlan.forEach(p=>{
+    const dia=new Date(p.f+'T12:00:00');
+    const k=getAsignKey(p.vigId,dia),pay={albId:p.albId,turno:p.tk};
+    asignaciones[k]=pay;saveAsignacion(k,pay);n++;
+  });
+  sugPlan=[];closeMod('m-sug');render();showToast(`✓ ${n} asignaciones aplicadas`);
 }
 
 // ══════ STORAGE → FIREBASE ══════
@@ -1214,7 +1717,7 @@ async function saveAsignacion(key, data) {
   else       { await window._fbDel('asignaciones', key); }
 }
 // vigs + vacaciones → single config docs, replaced on every Excel import
-async function saveVigs()       { await window._fbSet('config','vigs',      { list: vigs }); }
+async function saveVigs()       { await window._fbSet('config','vigs',      { list: vigs, rotAnchor, rotOn }); }
 async function saveVacaciones() { await window._fbSet('config','vacaciones', { list: vacaciones }); }
 function saveStore() { /* no-op: all saves are now per-operation via Firebase */ }
 
@@ -1229,5 +1732,12 @@ function showToast(msg){const t=document.getElementById('toast');t.textContent=m
 // and sets up real-time onSnapshot listeners for novedades & asignaciones.
 updDate();
 </script>
-</body>
-</html>
+<script>
+function applyTheme(t){document.documentElement.setAttribute('data-theme',t);var b=document.getElementById('btn-theme');if(b)b.textContent=t==='dark'?'☀':'◐';try{localStorage.setItem('gv-theme',t);}catch(e){}}
+function toggleTheme(){applyTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');}
+(function(){var t=null;try{t=localStorage.getItem('gv-theme');}catch(e){}
+if(!t)t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';applyTheme(t);})();
+</script>
+
+
+</body></html>
