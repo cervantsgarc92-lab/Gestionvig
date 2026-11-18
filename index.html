@@ -393,6 +393,7 @@ a:hover{color:var(--tm-t);text-decoration:underline;}
 a.share-btn:hover,button.share-btn:hover{background:var(--s3);border-color:var(--b2);color:var(--t1);text-decoration:none;}
 .share-btn.wa{background:#25D366;border-color:#128C7E;color:#073B16;}
 a.share-btn.wa:hover{background:#1EBE5A;border-color:#128C7E;color:#073B16;}
+button.share-btn:disabled{opacity:.6;cursor:wait;}
 .albname{font-size:14.5px;font-weight:700;letter-spacing:-.015em;}
 .albstats{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;}
 .astat{font-size:9.5px;font-weight:700;padding:3px 7px;border-radius:6px;font-family:var(--mono);}
@@ -814,6 +815,7 @@ a.share-btn.wa:hover{background:#1EBE5A;border-color:#128C7E;color:#073B16;}
 </div>
 
 <div id="exp-target" style="position:fixed;left:-9999px;top:0;width:960px;padding:22px;background:#fff;font-family:Arial,sans-serif;"></div>
+<div id="share-img-target" style="position:fixed;left:-9999px;top:0;width:960px;padding:22px;background:#fff;font-family:Arial,sans-serif;"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1195,6 +1197,7 @@ function buildAlbCard(alb){
   <div class="alb-share">
     <a class="share-btn wa" data-alb="${alb.id}" href="${waHref}" target="_blank" rel="noopener noreferrer">Enviar por WhatsApp</a>
     <button type="button" class="share-btn" data-copy-alb="${alb.id}" onclick="copiarRolAlbergue('${alb.id}')">Copiar texto</button>
+    <button type="button" class="share-btn" data-img-alb="${alb.id}" onclick="compartirImagenAlbergue('${alb.id}')">Compartir imagen</button>
   </div></div>${secs}${absSec}</div>`;
 }
 function renderGrid(){
@@ -1283,6 +1286,78 @@ function copiarRolAlbergue(albId){
   }
   if(copiarConTextarea(text)) done();
   else mostrarTextoRol(alb.name,text);
+}
+
+// Misma lámina que Exportar → Imagen · Día. `albs` puede ser uno o todos.
+function htmlImagenDia(albs){
+  const dateStr=selDate.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  let html=`<div style="padding:22px;background:#fff;font-family:Arial,sans-serif;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;padding-bottom:12px;border-bottom:3px solid #17150F;">
+      <div><div style="font-size:18px;font-weight:800">🛡 Protección y Seguridad</div>
+      <div style="font-size:11px;color:#6B6760;margin-top:3px;font-family:monospace">Turnos · ${dateStr}</div></div>
+    </div><div style="display:grid;grid-template-columns:repeat(${albs.length===1?1:2},1fr);gap:12px;">`;
+  albs.forEach(alb=>{
+    const turnos=['TM','TT','TN'];
+    html+=`<div style="border:1px solid #e5e1dc;border-radius:10px;overflow:hidden;"><div style="background:#17150F;color:#fff;padding:9px 13px;font-size:13px;font-weight:700">${alb.name}</div>`;
+    turnos.forEach(tk=>{
+      const info=TINFO[tk];
+      const{own,assigned}=getSlotWorkers(alb.id,tk,selDate);
+      const allW=[...own,...assigned],total=allW.length;
+      html+=`<div><div style="background:${info.bg};padding:6px 13px;display:flex;justify-content:space-between;align-items:center">
+        <span style="color:#fff;font-size:10px;font-weight:700">${tk} · ${info.label}${info.hours?' · '+info.hours:''}</span>
+        <span style="background:rgba(255,255,255,.2);color:#fff;font-size:9px;font-weight:700;padding:1px 7px;border-radius:4px">${total}/${alb.min}</span></div>
+        <div style="padding:7px 13px;display:flex;flex-wrap:wrap;gap:4px;background:rgba(0,0,0,.02)">`;
+      allW.forEach(v=>{const r=getRol(v);html+=`<span style="background:${info.lgt};color:${info.txt};border:1px solid;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600">${sn(v.nombre)}${r==='jt'?' ★':r==='vc'?' ◆':''}</span>`;});
+      if(!allW.length)html+=`<span style="font-size:10px;color:#C8C4BE">Sin personal</span>`;
+      html+=`</div></div>`;
+    });html+=`</div>`;
+  });
+  html+=`</div><div style="margin-top:14px;font-size:9px;color:#A09C96;text-align:right;font-family:monospace">Generado ${new Date().toLocaleString('es-MX')}</div></div>`;
+  return html;
+}
+function descargarPng(blob,filename){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=filename;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2500);
+}
+async function compartirImagenAlbergue(albId){
+  const alb=ALBS.find(a=>a.id===albId); if(!alb) return;
+  if(typeof html2canvas!=='function'){showToast('No se pudo generar la imagen. Revisa tu conexión.');return;}
+  const btn=document.querySelector('button[data-img-alb="'+albId+'"]');
+  if(btn) btn.disabled=true;
+  showToast('Generando imagen...');
+  const target=document.getElementById('share-img-target');
+  const filename='Rol-'+alb.name.replace(/\s+/g,'-')+'-'+dk(selDate)+'.png';
+  try{
+    target.innerHTML=htmlImagenDia([alb]);
+    target.style.display='block';
+    await new Promise(r=>setTimeout(r,400));
+    const canvas=await html2canvas(target,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false});
+    const blob=await new Promise((res,rej)=>canvas.toBlob(b=>b?res(b):rej(new Error('PNG vacío')),'image/png'));
+    const file=new File([blob],filename,{type:'image/png'});
+    const shareData={files:[file],title:'Rol '+alb.name};
+    let can=false;
+    try{ can=!!(navigator.canShare&&navigator.canShare(shareData)); }catch(_){}
+    if(can){
+      try{
+        await navigator.share(shareData);
+        showToast('✓ Elige el grupo en WhatsApp');
+        return;
+      }catch(e){
+        if(e&&e.name==='AbortError') return;
+      }
+    }
+    descargarPng(blob,filename);
+    showToast('✓ Imagen descargada');
+  }catch(e){
+    showToast('Error: '+(e&&e.message?e.message:e));
+  }finally{
+    target.style.display='none';
+    target.innerHTML='';
+    if(btn) btn.disabled=false;
+  }
 }
 
 // ══════ WEEK VIEW ══════
@@ -1613,31 +1688,7 @@ async function doExport(){
   const albs=expA==='todos'?ALBS:ALBS.filter(a=>a.id===expA);
   const target=document.getElementById('exp-target');
   if(expV==='dia'){
-    const dateStr=selDate.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-    let html=`<div style="padding:22px;background:#fff;font-family:Arial,sans-serif;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;padding-bottom:12px;border-bottom:3px solid #17150F;">
-        <div><div style="font-size:18px;font-weight:800">🛡 Protección y Seguridad</div>
-        <div style="font-size:11px;color:#6B6760;margin-top:3px;font-family:monospace">Turnos · ${dateStr}</div></div>
-      </div><div style="display:grid;grid-template-columns:repeat(${albs.length===1?1:2},1fr);gap:12px;">`;
-    albs.forEach(alb=>{
-      const turnos=['TM','TT','TN'];
-      html+=`<div style="border:1px solid #e5e1dc;border-radius:10px;overflow:hidden;"><div style="background:#17150F;color:#fff;padding:9px 13px;font-size:13px;font-weight:700">${alb.name}</div>`;
-      turnos.forEach(tk=>{
-        const info=TINFO[tk];
-        const{own,assigned}=getSlotWorkers(alb.id,tk,selDate);
-        const allW=[...own,...assigned],total=allW.length;
-        const covColor=total>=alb.min?'#065F46':total>=alb.min-1?'#92400E':'#991B1B';
-        html+=`<div><div style="background:${info.bg};padding:6px 13px;display:flex;justify-content:space-between;align-items:center">
-          <span style="color:#fff;font-size:10px;font-weight:700">${tk} · ${info.label}${info.hours?' · '+info.hours:''}</span>
-          <span style="background:rgba(255,255,255,.2);color:#fff;font-size:9px;font-weight:700;padding:1px 7px;border-radius:4px">${total}/${alb.min}</span></div>
-          <div style="padding:7px 13px;display:flex;flex-wrap:wrap;gap:4px;background:rgba(0,0,0,.02)">`;
-        allW.forEach(v=>{const r=getRol(v);html+=`<span style="background:${info.lgt};color:${info.txt};border:1px solid;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600">${sn(v.nombre)}${r==='jt'?' ★':r==='vc'?' ◆':''}</span>`;});
-        if(!allW.length)html+=`<span style="font-size:10px;color:#C8C4BE">Sin personal</span>`;
-        html+=`</div></div>`;
-      });html+=`</div>`;
-    });
-    html+=`</div><div style="margin-top:14px;font-size:9px;color:#A09C96;text-align:right;font-family:monospace">Generado ${new Date().toLocaleString('es-MX')}</div></div>`;
-    target.innerHTML=html;
+    target.innerHTML=htmlImagenDia(albs);
   } else {
     const days=getWeekDays(selDate);
     const wLabel=`${days[0].toLocaleDateString('es-MX',{day:'numeric',month:'short'})} – ${days[6].toLocaleDateString('es-MX',{day:'numeric',month:'short',year:'numeric'})}`;
