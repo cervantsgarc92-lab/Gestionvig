@@ -386,7 +386,13 @@ a:hover{color:var(--tm-t);text-decoration:underline;}
 /* DAY GRID */
 .albgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;align-items:start;}
 .albcard{background:var(--s1);border:1px solid var(--b1);border-radius:var(--rl);overflow:hidden;box-shadow:var(--sh2);}
-.albhead{padding:13px 16px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.albhead{padding:13px 16px;display:flex;flex-direction:column;align-items:stretch;gap:0;}
+.albhead-row{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;}
+.alb-share{display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:10px;}
+.share-btn{flex:1 1 140px;min-height:44px;padding:8px 10px;border-radius:8px;border:1px solid var(--b1);background:var(--s2);color:var(--t1);font-family:var(--body);font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;text-align:center;line-height:1.2;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
+a.share-btn:hover,button.share-btn:hover{background:var(--s3);border-color:var(--b2);color:var(--t1);text-decoration:none;}
+.share-btn.wa{background:#25D366;border-color:#128C7E;color:#073B16;}
+a.share-btn.wa:hover{background:#1EBE5A;border-color:#128C7E;color:#073B16;}
 .albname{font-size:14.5px;font-weight:700;letter-spacing:-.015em;}
 .albstats{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;}
 .astat{font-size:9.5px;font-weight:700;padding:3px 7px;border-radius:6px;font-family:var(--mono);}
@@ -1177,18 +1183,106 @@ function buildAlbCard(alb){
   const mkA=(list,cls,ico)=>list.map(v=>`<span class="achip ${cls}" onclick="openStatus(${v.id})">${ico} ${sn(v.nombre)}</span>`).join('');
   const absSec=(descL.length||vacL.length||incL.length||falL.length||perL.length)?`<div class="absent-sec"><div class="absent-title">Ausencias</div><div class="absent-chips">${mkA(descL,'desc','😴')}${mkA(vacL,'vac','🏖')}${mkA(incL,'inc','🤒')}${mkA(falL,'fal','✗')}${mkA(perL,'per','📋')}</div></div>`:'';
   const activos=['TM','TT','TN'].reduce((n,tk)=>{const{own,assigned}=getSlotWorkers(alb.id,tk,selDate);return n+own.length+assigned.length;},0);
-  return`<div class="albcard"><div class="albhead"><div class="albname">${alb.name}</div><div class="albstats">
+  const waHref=escAttr(hrefWhatsAppAlbergue(alb));
+  return`<div class="albcard"><div class="albhead"><div class="albhead-row"><div class="albname">${alb.name}</div><div class="albstats">
     <span class="astat" style="background:var(--td-l);color:var(--td-t)">▸ ${activos}</span>
     ${descL.length?`<span class="astat" style="background:var(--s3);color:var(--t2)">😴 ${descL.length}</span>`:''}
     ${vacL.length?`<span class="astat" style="background:var(--vac-bg);color:var(--vac)">🏖 ${vacL.length}</span>`:''}
     ${incL.length?`<span class="astat" style="background:var(--inc-bg);color:var(--inc)">🤒 ${incL.length}</span>`:''}
     ${falL.length?`<span class="astat" style="background:var(--fal-bg);color:var(--fal)">✗ ${falL.length}</span>`:''}
     ${perL.length?`<span class="astat" style="background:var(--per-bg);color:var(--per)">📋 ${perL.length}</span>`:''}
+  </div></div>
+  <div class="alb-share">
+    <a class="share-btn wa" data-alb="${alb.id}" href="${waHref}" target="_blank" rel="noopener noreferrer">Enviar por WhatsApp</a>
+    <button type="button" class="share-btn" data-copy-alb="${alb.id}" onclick="copiarRolAlbergue('${alb.id}')">Copiar texto</button>
   </div></div>${secs}${absSec}</div>`;
 }
 function renderGrid(){
   const albs=filterAlb==='todos'?ALBS:ALBS.filter(a=>a.id===filterAlb);
   document.getElementById('albgrid').innerHTML=albs.map(a=>buildAlbCard(a)).join('');
+}
+
+// ══════ WHATSAPP / COPIAR POR ALBERGUE ══════
+// Mismo texto que la imagen del día (exportación a la comunidad), limitado a un albergue.
+// Usa getSlotWorkers: asignaciones manuales, descansos, vacaciones y novedades.
+function marcaRol(v){
+  const r=getRol(v);
+  return r==='jt'?' ★':r==='vc'?' ◆':'';
+}
+function textoRolAlbergue(alb,date){
+  date=date||selDate;
+  const dateStr=date.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const lines=[
+    '🛡 *Protección y Seguridad*',
+    'Turnos · '+dateStr,
+    '',
+    '*'+alb.name+'*',
+  ];
+  ['TM','TT','TN'].forEach(tk=>{
+    const info=TINFO[tk];
+    const {own,assigned}=getSlotWorkers(alb.id,tk,date);
+    const allW=[...own,...assigned];
+    lines.push('');
+    lines.push('*'+tk+' · '+info.label+' · '+info.hours+'*');
+    if(!allW.length) lines.push('Sin personal');
+    else allW.forEach(v=>lines.push(sn(v.nombre)+marcaRol(v)));
+  });
+  return lines.join('\n');
+}
+function hrefWhatsAppAlbergue(alb){
+  // api.whatsapp.com conserva el texto. wa.me reescribe emojis de 4 bytes
+  // (el escudo del encabezado) y el mensaje llega roto.
+  return 'https://api.whatsapp.com/send?text='+encodeURIComponent(textoRolAlbergue(alb));
+}
+function escAttr(s){
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+}
+function copiarConTextarea(text){
+  try{
+    const ta=document.createElement('textarea');
+    ta.value=text;
+    ta.setAttribute('readonly','');
+    ta.style.cssText='position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0,text.length);
+    const ok=document.execCommand('copy');
+    ta.remove();
+    return ok;
+  }catch(e){return false;}
+}
+function mostrarTextoRol(nombre,text){
+  const prev=document.getElementById('rol-copy-ov');
+  if(prev) prev.remove();
+  const ov=document.createElement('div');
+  ov.id='rol-copy-ov';
+  ov.className='modal-bg on';
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+  ov.innerHTML='<div class="modal" style="width:min(440px,94vw)">'
+    +'<h3>Rol · '+nombre+'</h3>'
+    +'<div class="msub">Mantén pulsado el texto y elige Copiar.</div>'
+    +'<textarea id="rol-copy-ta" readonly style="width:100%;min-height:240px;margin-top:8px;border:1px solid var(--b1);border-radius:8px;padding:10px;font-family:var(--mono);font-size:16px;background:var(--s2);color:var(--t1);resize:vertical"></textarea>'
+    +'<div class="mactions"><button class="mbtn sec" type="button" id="rol-copy-close">Cerrar</button></div></div>';
+  document.body.appendChild(ov);
+  document.getElementById('rol-copy-close').onclick=()=>ov.remove();
+  const ta=document.getElementById('rol-copy-ta');
+  ta.value=text;
+  ta.focus();
+  ta.select();
+}
+function copiarRolAlbergue(albId){
+  const alb=ALBS.find(a=>a.id===albId); if(!alb) return;
+  const text=textoRolAlbergue(alb);
+  const done=()=>showToast('✓ Texto de '+alb.name+' copiado');
+  if(navigator.clipboard&&window.isSecureContext){
+    navigator.clipboard.writeText(text).then(done).catch(()=>{
+      if(copiarConTextarea(text)) done(); else mostrarTextoRol(alb.name,text);
+    });
+    return;
+  }
+  if(copiarConTextarea(text)) done();
+  else mostrarTextoRol(alb.name,text);
 }
 
 // ══════ WEEK VIEW ══════
